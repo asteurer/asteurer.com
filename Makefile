@@ -1,4 +1,4 @@
-.PHONY: plan show apply destroy
+.PHONY: plan show apply destroy ssh
 
 # OPTIONAL: You don't have to use the 1Password CLI, but can instead use plaintext or env vars
 DO_TOKEN := $(shell op item get digital_ocean --vault Prod --fields label=credential --reveal)
@@ -12,7 +12,10 @@ PROJECT_NAME := demo
 # OPTIONAL: Update awk command with the name of your SSH public key
 FINGERPRINT := $(shell doctl compute ssh-key list | awk '/main/ {print $$3}')
 
-apply: show
+# This ensures that the init.yaml file is present for all terraform commands
+IGNORE := $(shell echo "" > init.yaml)
+
+apply: plan
 	terraform apply --auto-approve "tfplan"
 
 show: plan
