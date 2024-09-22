@@ -1,0 +1,5 @@
+*.tfstate*
+*.terraform*
+*tfplan*
+*.json
+init.yaml

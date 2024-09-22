@@ -1,0 +1,209 @@
+#cloud-config
+
+#--------------------------------------
+# The data for the following Go templates need to be provided:
+# * Domain
+# * ProjectName
+# * AWSRegion
+# * Email
+#--------------------------------------
+
+# Disable the auto update and upgrade processes so we can override the interactive prompts in 'runcmd'
+package_update: false
+package_upgrade: false
+
+write_files:
+  - path: /home/ubuntu/html_files/index.php
+    permissions: '0644'
+    content: |
+      <!DOCTYPE html>
+      <html>
+      <head>
+          <title>Andrew Steurer</title>
+      </head>
+      <body>
+          <br>
+          <p>Hi there! This is a website that was created to demonstrate Andrew's abilities as a back-end engineer. Feel free to visit the following links:</p>
+          <ul>
+            <li><a href="http://asteurer.com/resume">Resume</a></li>
+            <li><a href="http://asteurer.com/meme">Meme of the Day</a></li>
+          <ul>
+      </body>
+      </html>
+
+  - path: /home/ubuntu/compose.yaml
+    permissions: '0644'
+    content: |
+      services:
+        nginx:
+          image: nginx:1.27.1-alpine
+          restart: unless-stopped
+          volumes:
+            - ./data/nginx:/etc/nginx/conf.d
+            - ./data/certbot/conf:/etc/letsencrypt
+            - ./data/certbot/www:/var/www/certbot
+          ports:
+            - 80:80
+            - 443:443
+          command: "/bin/sh -c 'while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g \"daemon off;\"'"
+        certbot:
+          image: certbot/certbot
+          restart: unless-stopped
+          volumes:
+            - ./data/certbot/conf:/etc/letsencrypt
+            - ./data/certbot/www:/var/www/certbot
+          entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+        website:
+          image: php:8.3-apache
+          volumes:
+            - ./html_files:/var/www/html
+
+  - path: /home/ubuntu/data/nginx/app.conf
+    permissions: '0644'
+    content: |
+      server {
+          listen 80;
+          server_name {{ .Domain }} www.{{ .Domain }};
+          server_tokens off;
+
+          location /.well-known/acme-challenge/ {
+              root /var/www/certbot;
+          }
+
+          location / {
+              return 301 https://$host$request_uri;
+          }
+      }
+
+      server {
+          listen 443 ssl;
+          server_name {{ .Domain }} www.{{ .Domain }};
+          server_tokens off;
+
+          ssl_certificate /etc/letsencrypt/live/{{ .Domain }}/fullchain.pem;
+          ssl_certificate_key /etc/letsencrypt/live/{{ .Domain }}/privkey.pem;
+          include /etc/letsencrypt/options-ssl-nginx.conf;
+          ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+          location / {
+              proxy_pass  http://{{ .ProjectName }}-website-1;
+
+              proxy_set_header    Host                $http_host;
+              proxy_set_header    X-Real-IP           $remote_addr;
+              proxy_set_header    X-Forwarded-For     $proxy_add_x_forwarded_for;
+              proxy_set_header    X-Forwarded-Proto   https;
+              proxy_set_header    X-Forwarded-Ssl     on;
+          }
+
+          location /resume {
+            proxy_pass https://s3.{{ .AWSRegion }}.amazonaws.com/{{ .Domain }}-static-files/resume.pdf;
+          }
+
+          location /meme {
+            proxy_pass https://s3.{{ .AWSRegion }}.amazonaws.com/{{ .Domain }}-static-files/meme.jpg;
+          }
+      }
+
+  - path: /home/ubuntu/init.sh
+    permissions: '0744'
+    content: |
+      #!/bin/bash
+
+      domains=("{{ .Domain }}" "www.{{ .Domain }}")
+      rsa_key_size=4096
+      data_path="./data/certbot"
+      email="{{ .Email }}"
+      staging=1 # Set to 1 if you're testing your setup to avoid hitting request limits
+
+      if [ ! -e "$data_path/conf/options-ssl-nginx.conf" ] || [ ! -e "$data_path/conf/ssl-dhparams.pem" ]; then
+        echo "### Downloading recommended TLS parameters ..."
+        mkdir -p "$data_path/conf"
+        curl -s https://raw.githubusercontent.com/certbot/certbot/master/certbot-nginx/certbot_nginx/_internal/tls_configs/options-ssl-nginx.conf > "$data_path/conf/options-ssl-nginx.conf"
+        curl -s https://raw.githubusercontent.com/certbot/certbot/master/certbot/certbot/ssl-dhparams.pem > "$data_path/conf/ssl-dhparams.pem"
+        echo
+      fi
+
+      echo "### Creating dummy certificate for $domains ..."
+      path="/etc/letsencrypt/live/$domains"
+      mkdir -p "$data_path/conf/live/$domains"
+      docker compose run --rm --entrypoint "\
+        openssl req -x509 -nodes -newkey rsa:$rsa_key_size -days 1\
+          -keyout '$path/privkey.pem' \
+          -out '$path/fullchain.pem' \
+          -subj '/CN=localhost'" certbot
+      echo
+
+
+      echo "### Starting all services ..."
+      docker compose -p "{{ .ProjectName }}" up --force-recreate -d
+      echo
+
+      echo "### Waiting for the compose stack to finish setting up..."
+      sleep 60
+      echo
+
+      echo "### Deleting dummy certificate for $domains ..."
+      docker compose run --rm --entrypoint "\
+        rm -Rf /etc/letsencrypt/live/$domains && \
+        rm -Rf /etc/letsencrypt/archive/$domains && \
+        rm -Rf /etc/letsencrypt/renewal/$domains.conf" certbot
+      echo
+
+      echo "### Requesting Let's Encrypt certificate for $domains ..."
+      #Join $domains to -d args
+      domain_args=""
+      for domain in "${domains[@]}"; do
+        domain_args="$domain_args -d $domain"
+      done
+
+      # Select appropriate email arg
+      case "$email" in
+        "") email_arg="--register-unsafely-without-email" ;;
+        *) email_arg="--email $email" ;;
+      esac
+
+      # Enable staging mode if needed
+      if [ $staging != "0" ]; then staging_arg="--staging"; fi
+
+      docker compose run --rm --entrypoint "\
+        certbot certonly --webroot -w /var/www/certbot \
+          $staging_arg \
+          $email_arg \
+          $domain_args \
+          --rsa-key-size $rsa_key_size \
+          --agree-tos \
+          --force-renewal" certbot \
+          --non-interactive
+      echo
+
+      echo "### Reloading nginx ..."
+      docker exec -i {{ .ProjectName }}-nginx-1 nginx -s reload
+
+runcmd:
+  # Set the environment variable to avoid prompts
+  - export DEBIAN_FRONTEND=noninteractive
+
+  # Set up default options for dpkg
+  - echo 'Dpkg::Options { "--force-confdef"; "--force-confold"; }' > /etc/apt/apt.conf.d/90force-conf
+
+  # Add Docker's official GPG key:
+  - apt-get update
+  - apt-get install -y ca-certificates curl
+  - install -m 0755 -d /etc/apt/keyrings
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+  - chmod a+r /etc/apt/keyrings/docker.asc
+
+  # Add the repository to Apt sources:
+  - |-
+    echo \
+      "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
+      $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+      tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+  - apt-get update
+  - apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+  - systemctl enable docker
+  - systemctl start docker
+
+  - cd /home/ubuntu && ./init.sh
