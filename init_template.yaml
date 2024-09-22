@@ -25,8 +25,8 @@ write_files:
           <br>
           <p>Hi there! This is a website that was created to demonstrate Andrew's abilities as a back-end engineer. Feel free to visit the following links:</p>
           <ul>
-            <li><a href="http://asteurer.com/resume">Resume</a></li>
-            <li><a href="http://asteurer.com/meme">Meme of the Day</a></li>
+            <li><a href="http://{{ .Domain }}/resume">Resume</a></li>
+            <li><a href="http://{{ .Domain }}/meme">Meme of the Day</a></li>
           <ul>
       </body>
       </html>
