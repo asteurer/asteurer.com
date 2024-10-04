@@ -2,4 +2,3 @@
 *.terraform*
 *tfplan*
 *.json
-init.yaml
