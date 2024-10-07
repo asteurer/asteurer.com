@@ -102,6 +102,9 @@ master-store-kubeconfig: master-get-ip
 			sed 's/server: https:\/\/127.0.0.1:6443/server: https:\/\/$(IP_ADDR_MASTER):6443/' > \
 				~/.kube/$(CF_DOMAIN).config
 
+# Configures the NGINX server and SSL
+nginx-config:
+	@$(eval CF_EMAIL := $(shell op item get cloudflare_$(CF_DOMAIN) --vault $(OP_VAULT) --fields label=email --reveal))
 
 # Install the connect server and wait for it to initialize
 master-install-op-connect:
