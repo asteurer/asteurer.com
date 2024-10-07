@@ -22,32 +22,32 @@ server {
 
     server_name $CF_DOMAIN www.$CF_DOMAIN;
 
-    location / {
-        try_files \$uri \$uri/ =404;
-    }
-
-    # Handle URLs like /meme/1
-    location ~ ^/meme/(\d+)$ {
-        rewrite ^/meme/(\d+)$ /meme/index.php?id=\$1 last;
-    }
-
-    location /meme-api/ {
+    location /memes-api/ {
         proxy_pass http://10.0.0.4:30080/;
+        proxy_set_header Authorization $http_authorization;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
 
-        # Pass the original Authorization header along with the request
-        proxy_set_header Authorization \$http_authorization;
-
-        # Keep the original request path
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
+	    # Increase the default payload limit from 1M
+        client_max_body_size 5M;
     }
 
-    # Pass PHP scripts to the FastCGI server
+    # Handle URLs like /memes/1
+    location ~ ^/memes/(\d+)$ {
+        rewrite ^/memes/(\d+)$ /memes/index.php?id=$1 last;
+    }
+
+    # PHP scripts
     location ~ \.php$ {
         include snippets/fastcgi-php.conf;
         fastcgi_pass unix:/var/run/php/php-fpm.sock;
+    }
+
+    # General fallback
+    location / {
+        try_files $uri $uri/ =404;
     }
 }
 EOF
