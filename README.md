@@ -2,6 +2,12 @@
 
 This is the source code for [asteurer.com](https://asteurer.com).
 
+## Diagram
+
+Below is a visual overview of the site's backend:
+
+![asteurer.com diagram](README_files/asteurer.com_diagram.png)
+
 ## Technologies Used
 
 ### Infrastructure
