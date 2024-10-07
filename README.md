@@ -12,14 +12,12 @@ Below is a visual overview of the site's backend:
 
 ### Infrastructure
 - ***Terraform***
-- AWS ***EC2***
+- AWS ***EC2***, using Debian Linux for both the NGINX and Master Node servers
 - AWS ***VPC***, including security groups and subnets
 - AWS ***S3***
 - ***CloudFlare*** DNS Records
-- ***Debian Linux*** used for both the NGINX and Kubernetes servers
 - ***NGINX*** as a reverse-proxy
-- ***Kubernetes***
-- ***K3S*** distribution of Kubernetes
+- ***Kubernetes*** used K3S, a lightweight Kubernetes distribution
 - ***GitHub Actions*** coming soon...used to make updates to the servers that reflect changes in the HTML (and maybe other) files
 
 ### Kubernetes Tools
