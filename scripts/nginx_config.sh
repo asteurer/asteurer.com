@@ -26,6 +26,24 @@ server {
         try_files \$uri \$uri/ =404;
     }
 
+    # Handle URLs like /meme/1
+    location ~ ^/meme/(\d+)$ {
+        rewrite ^/meme/(\d+)$ /meme/index.php?id=\$1 last;
+    }
+
+    location /meme-api/ {
+        proxy_pass http://10.0.0.4:30080/;
+
+        # Pass the original Authorization header along with the request
+        proxy_set_header Authorization \$http_authorization;
+
+        # Keep the original request path
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+
     # Pass PHP scripts to the FastCGI server
     location ~ \.php$ {
         include snippets/fastcgi-php.conf;

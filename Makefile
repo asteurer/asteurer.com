@@ -1,8 +1,17 @@
-.PHONY: tf-apply tf-show tf-plan tf-destroy tfvars nginx-ssh nginx-show-ip nginx-get-ip nginx-init nginx-config nginx-update-html store
+.PHONY: tf-apply tf-show tf-plan tf-destroy tfvars \
+		nginx-ssh nginx-show-ip nginx-get-ip nginx-config nginx-update-html \
+		master-ssh master-get-ip master-init-k3s master-store-kubeconfig \
+		master-install-op-connect master-install-meme-db docker-build docker-push
+
+
 
 CF_DOMAIN := asteurer.com
 AWS_REGION := us-west-2
-OP_VAULT := Prod
+OP_VAULT := asteurer.com_infra
+
+#################################################################################
+# Terraform
+#################################################################################
 
 # Deploy the infrastructure
 tf-apply: tf-plan
@@ -34,9 +43,13 @@ tfvars:
 		--var "cloudflare_api_token=$(CF_TOKEN)"\
 	)
 
+#################################################################################
+# NGINX Node
+#################################################################################
+
 # SSH into the EC2 instance
 nginx-ssh: nginx-get-ip
-	@ssh ubuntu@$(IP_ADDR_NGINX)
+	@ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ubuntu@$(IP_ADDR_NGINX)
 
 # Show the IP address of the EC2 instance
 nginx-show-ip: nginx-get-ip
@@ -60,8 +73,6 @@ nginx-config:
 
 # Updates the html files
 nginx-update-html:
-	@$(eval CF_DOMAIN := $(shell op item get cloudflare_$(CF_DOMAIN) --vault $(OP_VAULT) --fields label=url))
-
 	@ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ubuntu@$(CF_DOMAIN) \
 		'mkdir -p /home/ubuntu/temp/html'
 
@@ -71,11 +82,53 @@ nginx-update-html:
 	@ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ubuntu@$(CF_DOMAIN) \
 		'sudo rm -rf /var/www/$(CF_DOMAIN)/html && sudo mv /home/ubuntu/temp/html /var/www/$(CF_DOMAIN) && rm -rf /home/ubuntu/temp'
 
-# Allow the k3s server to receive requests via the public IP, delete the existing kubeconfig file and update 1Password with the new config file.
-# @$(MAKE) --no-print-directory store
-# store: k3s-master-get-ip
-# 	@op document delete kubeconfig --vault Dev 2>/dev/null || true
+#################################################################################
+# K3S Master Node
+#################################################################################
 
-# 	@ssh ubuntu@$(IP_ADDR_K3S_MASTER) 'sudo cat /etc/rancher/k3s/k3s.yaml' | \
-# 		sed 's/server: https:\/\/127.0.0.1:6443/server: https:\/\/$(IP_ADDR_K3S_MASTER):6443/' | \
-# 			op document create --file-name config.yaml --title kubeconfig --vault Dev -
+master-ssh: master-get-ip
+	@ssh ubuntu@$(IP_ADDR_MASTER)
+
+master-get-ip:
+	@$(eval IP_ADDR_MASTER := $(shell terraform  output --json | jq -r '.master_node_ip.value'))
+
+master-init-k3s: master-get-ip
+	@ssh ubuntu@$(IP_ADDR_MASTER) 'curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--tls-san $$(curl http://checkip.amazonaws.com)" sh -'
+
+# @$(MAKE) --no-print-directory store
+master-store-kubeconfig: master-get-ip
+	@ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ubuntu@$(IP_ADDR_MASTER) \
+		'sudo cat /etc/rancher/k3s/k3s.yaml' | \
+			sed 's/server: https:\/\/127.0.0.1:6443/server: https:\/\/$(IP_ADDR_MASTER):6443/' > \
+				~/.kube/$(CF_DOMAIN).config
+
+# Configures the NGINX server and SSL
+nginx-config:
+	@$(eval CF_EMAIL := $(shell op item get cloudflare_$(CF_DOMAIN) --vault $(OP_VAULT) --fields label=email --reveal))
+
+# Install the connect server and wait for it to initialize
+master-install-op-connect:
+	@helm repo add 1password https://1password.github.io/connect-helm-charts/
+	@helm upgrade --install op-connect 1password/connect \
+		--namespace 1password \
+		--create-namespace \
+		--set connect.credentials_base64="$$(op document get op_connect_creds --vault asteurer.com_apps | base64 -w 0)" \
+		--set operator.create=true \
+		--set operator.token.value="$$(op item get op_connect_token --vault asteurer.com_apps --fields label=credential --reveal)" \
+		--set operator.autoRestart=true
+
+	@sleep 120
+
+# Install the meme-database stack
+master-install-meme-db:
+	@helm upgrade --install meme-db-release ./helm_charts/memes --values ./helm_charts/memes/values.yaml
+
+#################################################################################
+# Build Docker images
+#################################################################################
+
+docker-build:
+	@docker build ./db_client -t ghcr.io/asteurer/asteurer.com-memes-client
+
+docker-push:
+	@docker push ghcr.io/asteurer/asteurer.com-memes-client

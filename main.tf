@@ -129,72 +129,81 @@ resource "aws_route_table_association" "dev" {
 # SERVER: K3S Master Node
 #--------------------------------------------------------------------------------
 
-# resource "aws_instance" "master_node" {
-#   ami                         = data.aws_ami.ubuntu.id
-#   instance_type               = "t4g.small"
-#   associate_public_ip_address = true
-#   key_name                    = aws_key_pair.dev.key_name
-#   subnet_id                   = aws_subnet.dev.id
-#   vpc_security_group_ids      = [aws_security_group.sg_master_node.id]
-#   user_data                   = file("init_master_node.yaml")
+resource "aws_instance" "master_node" {
+  ami                         = data.aws_ami.ubuntu.id
+  instance_type               = "t3a.small"
+  key_name                    = aws_key_pair.dev.key_name
+  associate_public_ip_address = true
+  private_ip                  = "10.0.0.4"
+  subnet_id                   = aws_subnet.dev.id
+  vpc_security_group_ids      = [aws_security_group.sg_master_node.id]
 
-#   tags = {
-#     "Name" = "${var.cloudflare_domain}-master-node"
-#   }
-# }
+  tags = {
+    "Name" = "${var.cloudflare_domain}-master-node"
+  }
+}
 
-# output "master_node_ip" {
-#   value = aws_instance.master_node.public_ip
-# }
+output "master_node_ip" {
+  value = aws_instance.master_node.public_ip
+}
 
-# resource "aws_security_group" "sg_master_node" {
-#   description = "Allow SSH, HTTP, and HTTPS from anywhere"
-#   vpc_id      = aws_vpc.dev.id
+resource "aws_security_group" "sg_master_node" {
+  description = "Allow SSH, HTTP, and HTTPS from anywhere"
+  vpc_id      = aws_vpc.dev.id
 
-#   ingress {
-#     description = "SSH"
-#     from_port   = 22
-#     to_port     = 22
-#     protocol    = "tcp"
-#     cidr_blocks = ["0.0.0.0/0"]
-#   }
+  ingress {
+    description = "SSH"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 
-#   ingress {
-#     description = "HTTP"
-#     from_port   = 80
-#     to_port     = 80
-#     protocol    = "tcp"
-#     cidr_blocks = [aws_subnet.dev.cidr_block]
-#   }
+  # Allow for access to the KubeAPI Server
+  ingress {
+    description = "HTTP"
+    from_port   = "6443"
+    to_port     = "6443"
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 
-#   ingress {
-#     description = "HTTPS"
-#     from_port   = 443
-#     to_port     = 443
-#     protocol    = "tcp"
-#     cidr_blocks = [aws_subnet.dev.cidr_block]
-#   }
+  ingress {
+    description = "HTTP"
+    from_port   = "30080"
+    to_port     = "30080"
+    protocol    = "tcp"
+    cidr_blocks = [aws_subnet.dev.cidr_block]
+  }
 
-#   ingress {
-#     description = "Kubernetes API"
-#     from_port   = 6443
-#     to_port     = 6443
-#     protocol    = "tcp"
-#     cidr_blocks = ["0.0.0.0/0"]
-#   }
+  ingress {
+    description = "HTTP"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = [aws_subnet.dev.cidr_block]
+  }
 
-#   egress {
-#     description = "Allow all outbound traffic"
-#     from_port   = 0
-#     to_port     = 0
-#     protocol    = "-1" # All protocols
-#     cidr_blocks = ["0.0.0.0/0"]
-#   }
+  ingress {
+    description = "HTTPS"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = [aws_subnet.dev.cidr_block]
+  }
 
-#   tags = {
-#     "Name" = "sg-${var.cloudflare_domain}-master-node"
-#   }
-# }
+  egress {
+    description = "Allow all outbound traffic"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1" # All protocols
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    "Name" = "sg-${var.cloudflare_domain}-master-node"
+  }
+}
 
 #--------------------------------------------------------------------------------
 # SERVER: NGINX
@@ -254,7 +263,7 @@ resource "aws_security_group" "sg_nginx" {
   }
 
   tags = {
-    "Name" = "sg-${var.cloudflare_domain}-master-node"
+    "Name" = "sg-${var.cloudflare_domain}-nginx"
   }
 }
 
