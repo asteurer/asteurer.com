@@ -30,7 +30,7 @@ func writeErr(c *gin.Context, statusCode int, msg string) {
 	}
 }
 
-// getMeme returns the current, previous, and next meme URLs. If no meme_id is provided in the request URL,
+// GetMeme returns the current, previous, and next meme URLs. If no meme_id is provided in the request URL,
 // the first meme is used as the current meme, the last is used as the prev meme, and the second is used as the next meme.
 func GetMeme(ctx context.Context, db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -121,6 +121,7 @@ func GetMeme(ctx context.Context, db *sql.DB) gin.HandlerFunc {
 	}
 }
 
+// GetAllMemes lists all memes in the database
 func GetAllMemes(ctx context.Context, db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		rows, err := db.QueryContext(ctx, "SELECT * FROM memes")
@@ -148,7 +149,7 @@ func GetAllMemes(ctx context.Context, db *sql.DB) gin.HandlerFunc {
 	}
 }
 
-// putMeme places an image in an S3 bucket and inserts the corresponding S3 URL into the database
+// PutMeme inserts a URL into the database
 func PutMeme(ctx context.Context, db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		url, err := io.ReadAll(c.Request.Body)
@@ -179,6 +180,7 @@ func PutMeme(ctx context.Context, db *sql.DB) gin.HandlerFunc {
 	}
 }
 
+// DeleteMeme deletes a specified meme from the database
 func DeleteMeme(ctx context.Context, db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		idStr, ok := c.Params.Get("meme_id")
