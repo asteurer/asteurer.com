@@ -9,8 +9,6 @@ COPY ./go .
 RUN go mod download
 RUN go build -o main main.go
 
-# RUN CGO_ENABLED=1 GOOS=linux go build -o main main.go
-
 FROM alpine
 # Install runtime dependencies for bimg library
 RUN apk add --no-cache vips
