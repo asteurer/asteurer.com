@@ -6,6 +6,7 @@ metadata:
 data:
   schema.sql: {{ .Files.Get "files/schema.sql" | indent 4 }}
 
+# Generating database secrets
 {{- range .Values.memes.database.secrets }}
 ---
 apiVersion: onepassword.com/v1
@@ -14,10 +15,10 @@ metadata:
   name: "{{ .name }}"
 spec:
   itemPath: "{{ .path }}"
-
 {{- end }}
 
-{{- range .Values.memes.client.secrets }}
+# Generating meme-manager secrets
+{{- range .Values.memes.manager.secrets }}
 ---
 apiVersion: onepassword.com/v1
 kind: OnePasswordItem
@@ -25,7 +26,6 @@ metadata:
   name: "{{ .name }}"
 spec:
   itemPath: "{{ .path }}"
-
 {{- end }}
 ---
 apiVersion: apps/v1
@@ -46,11 +46,12 @@ spec:
     spec:
       containers:
         - name: "{{ .Values.memes.prefix }}-database"
-          image: postgres
+          image: "{{ .Values.memes.database.image }}"
           imagePullPolicy: Always
           ports:
             - containerPort: 5432
           env:
+            # Creating database secretKeyRef
             {{- range .Values.memes.database.secrets }}
             - name: "{{ upper .name | replace "-" "_"}}"
               valueFrom:
@@ -77,21 +78,21 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: "{{ .Values.memes.prefix }}-client"
+  name: "{{ .Values.memes.prefix }}-db-client"
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: "{{ .Values.memes.prefix }}-client"
+      app: "{{ .Values.memes.prefix }}-db-client"
   template:
     metadata:
       annotations:
-        operator.1password.io/inject: "{{ .Values.memes.prefix }}-client"
+        operator.1password.io/inject: "{{ .Values.memes.prefix }}-db-client"
       labels:
-        app: "{{ .Values.memes.prefix }}-client"
+        app: "{{ .Values.memes.prefix }}-db-client"
     spec:
       containers:
-        - name: "{{ .Values.memes.prefix }}-client"
+        - name: "{{ .Values.memes.prefix }}-db-client"
           image: "{{ .Values.memes.client.image }}"
           imagePullPolicy: Always
           ports:
@@ -103,14 +104,42 @@ spec:
               value: "5432"
             - name: POSTGRES_DATABASE
               value: postgres
-            {{- range .Values.memes.client.secrets }}
+            # Generating database secrets
+            {{- range .Values.memes.database.secrets }}
             - name: "{{ upper .name | replace "-" "_"}}"
               valueFrom:
                 secretKeyRef:
                   name: "{{ .name }}"
                   key: "{{ .key }}"
             {{- end }}
-            {{- range .Values.memes.database.secrets }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: "{{ .Values.memes.prefix }}-meme-manager"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: "{{ .Values.memes.prefix }}-meme-manager"
+  template:
+    metadata:
+      annotations:
+        operator.1password.io/inject: "{{ .Values.memes.prefix }}-meme-manager"
+      labels:
+        app: "{{ .Values.memes.prefix }}-meme-manager"
+    spec:
+      containers:
+        - name: "{{ .Values.memes.prefix }}-meme-manager"
+          image: "{{ .Values.memes.manager.image }}"
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+          env:
+            - name: DB_CLIENT_URL
+              value: "http://{{ .Values.memes.prefix }}-db-client.default.svc.cluster.local:8080/meme"
+            # Generating meme-manager secrets
+            {{- range .Values.memes.manager.secrets }}
             - name: "{{ upper .name | replace "-" "_"}}"
               valueFrom:
                 secretKeyRef:
@@ -136,9 +165,9 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: "{{ .Values.memes.prefix }}-client"
+  name: "{{ .Values.memes.prefix }}-db-client"
   labels:
-    app: "{{ .Values.memes.prefix }}-client"
+    app: "{{ .Values.memes.prefix }}-db-client"
 spec:
   # type: ClusterIP
   type: NodePort
@@ -147,4 +176,18 @@ spec:
       targetPort: 8080
       nodePort: 30080
   selector:
-    app: "{{ .Values.memes.prefix }}-client"
+    app: "{{ .Values.memes.prefix }}-db-client"
+# ---
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: "{{ .Values.memes.prefix }}-db-client"
+#   labels:
+#     app: "{{ .Values.memes.prefix }}-db-client"
+# spec:
+#   type: ClusterIP
+#   ports:
+#     - port: 8080
+#       targetPort: 8080
+#   selector:
+#     app: "{{ .Values.memes.prefix }}-db-client"

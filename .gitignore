@@ -1,4 +1,5 @@
 *.tfstate*
 *.terraform*
 *tfplan*
-*.json
+venv/
+*py*cache*

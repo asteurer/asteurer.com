@@ -36,7 +36,7 @@ variable "ssh_public_key" {
   type = string
 }
 
-variable "cloudflare_domain" {
+variable "domain" {
     type = string
 }
 
@@ -49,7 +49,7 @@ variable "cloudflare_api_token" {
 }
 
 locals {
-  name_tag = {"Name" = "${var.cloudflare_domain}"}
+  name_tag = {"Name" = "${var.domain}"}
 }
 
 #################################################################################
@@ -76,8 +76,8 @@ data "aws_ami" "ubuntu" {
   owners = ["099720109477"] # Canonical
 }
 
-resource "aws_key_pair" "dev" {
-    key_name   = var.cloudflare_domain
+resource "aws_key_pair" "prod" {
+    key_name   = var.domain
     public_key = var.ssh_public_key
 
     tags       = local.name_tag
@@ -87,42 +87,42 @@ resource "aws_key_pair" "dev" {
 # Networking
 #--------------------------------------------------------------------------------
 
-resource "aws_vpc" "dev" {
+resource "aws_vpc" "prod" {
   cidr_block = "10.0.0.0/16"
 
   tags       = local.name_tag
 }
 
-resource "aws_subnet" "dev" {
-  vpc_id            = aws_vpc.dev.id
+resource "aws_subnet" "public" {
+  vpc_id            = aws_vpc.prod.id
   availability_zone = "${var.aws_region}a"
   cidr_block        = "10.0.0.0/24"
 
   tags              =  local.name_tag
 }
 
-resource "aws_internet_gateway" "dev" {
-  vpc_id = aws_vpc.dev.id
+resource "aws_internet_gateway" "prod" {
+  vpc_id = aws_vpc.prod.id
 
   tags   =  local.name_tag
 
 }
 
-resource "aws_route_table" "dev" {
-  vpc_id = aws_vpc.dev.id
+resource "aws_route_table" "prod" {
+  vpc_id = aws_vpc.prod.id
 
   route {
     cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.dev.id
+    gateway_id = aws_internet_gateway.prod.id
   }
 
   tags =  local.name_tag
 
 }
 
-resource "aws_route_table_association" "dev" {
-  subnet_id      = aws_subnet.dev.id
-  route_table_id = aws_route_table.dev.id
+resource "aws_route_table_association" "prod" {
+  subnet_id      = aws_subnet.public.id
+  route_table_id = aws_route_table.prod.id
 }
 
 #--------------------------------------------------------------------------------
@@ -132,14 +132,14 @@ resource "aws_route_table_association" "dev" {
 resource "aws_instance" "master_node" {
   ami                         = data.aws_ami.ubuntu.id
   instance_type               = "t3a.small"
-  key_name                    = aws_key_pair.dev.key_name
+  key_name                    = aws_key_pair.prod.key_name
   associate_public_ip_address = true
   private_ip                  = "10.0.0.4"
-  subnet_id                   = aws_subnet.dev.id
+  subnet_id                   = aws_subnet.public.id
   vpc_security_group_ids      = [aws_security_group.sg_master_node.id]
 
   tags = {
-    "Name" = "${var.cloudflare_domain}-master-node"
+    "Name" = "${var.domain}-master-node"
   }
 }
 
@@ -148,8 +148,8 @@ output "master_node_ip" {
 }
 
 resource "aws_security_group" "sg_master_node" {
-  description = "Allow SSH, HTTP, and HTTPS from anywhere"
-  vpc_id      = aws_vpc.dev.id
+  description = "security group for K3S master node"
+  vpc_id      = aws_vpc.prod.id
 
   ingress {
     description = "SSH"
@@ -173,7 +173,7 @@ resource "aws_security_group" "sg_master_node" {
     from_port   = "30080"
     to_port     = "30080"
     protocol    = "tcp"
-    cidr_blocks = [aws_subnet.dev.cidr_block]
+    cidr_blocks = [aws_subnet.public.cidr_block]
   }
 
   ingress {
@@ -181,7 +181,7 @@ resource "aws_security_group" "sg_master_node" {
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
-    cidr_blocks = [aws_subnet.dev.cidr_block]
+    cidr_blocks = [aws_subnet.public.cidr_block]
   }
 
   ingress {
@@ -189,7 +189,7 @@ resource "aws_security_group" "sg_master_node" {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
-    cidr_blocks = [aws_subnet.dev.cidr_block]
+    cidr_blocks = [aws_subnet.public.cidr_block]
   }
 
   egress {
@@ -201,7 +201,7 @@ resource "aws_security_group" "sg_master_node" {
   }
 
   tags = {
-    "Name" = "sg-${var.cloudflare_domain}-master-node"
+    "Name" = "sg-${var.domain}-master-node"
   }
 }
 
@@ -213,12 +213,12 @@ resource "aws_instance" "nginx" {
   ami                         = data.aws_ami.ubuntu.id
   instance_type               = "t3a.nano"
   associate_public_ip_address = true
-  key_name                    = aws_key_pair.dev.key_name
-  subnet_id                   = aws_subnet.dev.id
+  key_name                    = aws_key_pair.prod.key_name
+  subnet_id                   = aws_subnet.public.id
   vpc_security_group_ids      = [aws_security_group.sg_nginx.id]
 
   tags = {
-    "Name" = "${var.cloudflare_domain}-nginx"
+    "Name" = "${var.domain}-nginx"
   }
 }
 
@@ -227,8 +227,8 @@ output "nginx_node_ip" {
 }
 
 resource "aws_security_group" "sg_nginx" {
-  description = "Allow SSH, HTTP, and HTTPS from anywhere"
-  vpc_id      = aws_vpc.dev.id
+  description = "security group for NGINX"
+  vpc_id      = aws_vpc.prod.id
 
   ingress {
     description = "SSH"
@@ -263,7 +263,7 @@ resource "aws_security_group" "sg_nginx" {
   }
 
   tags = {
-    "Name" = "sg-${var.cloudflare_domain}-nginx"
+    "Name" = "sg-${var.domain}-nginx"
   }
 }
 
@@ -272,7 +272,7 @@ resource "aws_security_group" "sg_nginx" {
 #################################################################################
 
 resource "aws_s3_bucket" "static_files" {
-  bucket = "${var.cloudflare_domain}-static-files"
+  bucket = "${var.domain}-prod"
   force_destroy = true
 }
 
@@ -312,6 +312,64 @@ resource "aws_s3_bucket_policy" "static_files" {
 
 output "s3_bucket_name" {
   value = aws_s3_bucket.static_files.bucket
+}
+
+#################################################################################
+# IAM Service Account
+#################################################################################
+
+resource "aws_iam_user" "prod" {
+  name = "prod_user"
+
+  tags = local.name_tag
+}
+
+resource "aws_iam_group" "prod" {
+  name = "${var.domain}_PROD"
+}
+
+data "aws_iam_policy_document" "bucket_permissions" {
+  statement {
+    sid = "BucketLevelPermissions"
+    effect    = "Allow"
+    actions = ["s3:ListBucket"]
+    resources = [aws_s3_bucket.static_files.arn]
+  }
+
+  statement {
+    sid = "ObjectLevelPermissions"
+    effect = "Allow"
+    actions = ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"]
+    resources = ["${aws_s3_bucket.static_files.arn}/*"]
+  }
+}
+
+resource "aws_iam_group_policy" "bucket_permissions" {
+  name = "S3GetPutDelete"
+  group = aws_iam_group.prod.name
+  policy = data.aws_iam_policy_document.bucket_permissions.json
+}
+
+resource "aws_iam_access_key" "prod" {
+  user = aws_iam_user.prod.name
+}
+
+output "access_key_id" {
+  sensitive = true
+  value = aws_iam_access_key.prod.id
+}
+
+output "secret_access_key" {
+  sensitive = true
+  value = aws_iam_access_key.prod.secret
+}
+
+resource "aws_iam_user_group_membership" "prod_user" {
+  user = aws_iam_user.prod.name
+
+  groups = [
+    aws_iam_group.prod.name
+  ]
 }
 
 #################################################################################

@@ -2,33 +2,10 @@
 
 This is the source code for [asteurer.com](https://asteurer.com).
 
-## Diagram
+## Technologies
 
-Below is a visual overview of the site's backend:
-
-![asteurer.com diagram](README_files/asteurer.com_diagram.png)
-
-## Technologies Used
-
-### Infrastructure
-- ***Terraform***
-- AWS ***EC2***, using Debian Linux for both the NGINX and Master Node servers
-- AWS ***VPC***, including security groups and subnets
-- AWS ***S3***
-- ***CloudFlare*** DNS Records
-- ***NGINX*** as a reverse-proxy
-- ***Kubernetes*** used K3S, a lightweight Kubernetes distribution
-- ***GitHub Actions*** coming soon...used to make updates to the servers that reflect changes in the HTML (and maybe other) files
-
-### Kubernetes Tools
-- ***Helm*** used to template and deploy the Kubernetes manifests
-- ***1Password Connect Server*** runs in Kubernetes to help with secrets automation
-- ***Docker*** used to install build dependencies for the Go app
-
-### Programming Languages
-- ***Golang*** for the `memes-api`
-- ***Bash***, most of which is in the `scripts` directory and the `Makefile`.
-- ***PostgreSQL*** for the `memes` database
-
-### Other
-- ***1Password CLI*** makes it easy to open source my code without compromising secrets, and helps with secrets automation
+- The infrastructure for this website is managed with ***Terraform***, which was chosen because the project uses resources from both ***AWS*** and ***CloudFlare***.
+- Various ***Python*** and ***Bash*** scripts were written so the website could be up-and-running from scratch in less than 10 minutes.
+- The front-end of the project is PHP and HTML files served via ***NGINX***, and encrypted with ***SSL certificates***.
+- The back-end portion is a ***Kubernetes*** cluster, running a ***Helm*** deployment containing ***Postgres*** and ***Golang*** applications.
+- ***Secrets automation*** is accomplished using 1Password's CLI and Kubernetes Connect Server.
