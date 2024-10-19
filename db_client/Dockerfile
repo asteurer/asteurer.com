@@ -1,5 +1,5 @@
 ARG GOLANG_VER=1.23
-FROM golang:${GOLANG_VER}-alpine as builder
+FROM golang:${GOLANG_VER}-alpine AS builder
 WORKDIR /app
 COPY ./go .
 

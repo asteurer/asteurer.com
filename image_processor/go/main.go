@@ -253,6 +253,13 @@ func sendImageToS3(imageBytes []byte) error {
 	return nil
 }
 
-func deleteMeme(id int) error {
-	return nil
-}
+// func deleteMeme(id int) error {
+// 	urlParts := strings.Split(memeURL, "/")
+// 	s3ObjectName := urlParts[len(urlParts)-1]
+// 	// Delete the meme from S3
+// 	deleteParams := &s3.DeleteObjectInput{Bucket: aws.String(cfg.S3Bucket), Key: aws.String("memes/" + s3ObjectName)}
+// 	if _, err := s3Client.DeleteObject(cfg.Context, deleteParams); err != nil {
+// 		writeErr(c, http.StatusInternalServerError, err.Error())
+// 		return
+// 	}
+// }
