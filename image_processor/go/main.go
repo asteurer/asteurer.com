@@ -160,11 +160,11 @@ func handleMessage(message *tgbotapi.Message) {
 	if image != nil {
 		imageData, err := retrieveImage(message)
 		if err != nil {
-			log.Panic(err)
+			log.Fatal(err)
 		}
 
 		if err := sendImageToS3(imageData); err != nil {
-			log.Panic(err)
+			log.Fatal(err)
 		}
 	}
 }
@@ -196,7 +196,7 @@ func retrieveImage(message *tgbotapi.Message) ([]byte, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("ERROR: Bad status\n%s", resp.Status)
+		return nil, fmt.Errorf("ERROR: Bad status\n%s\n%s", resp.Status, string(fileBytes))
 	}
 
 	return fileBytes, nil
