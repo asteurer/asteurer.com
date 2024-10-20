@@ -38,8 +38,6 @@ def test_can_read():
     assert create_task_response_2.status_code == 200
     id_2 = create_task_response_2.json()["id"]
 
-
-
     # Check that we can retrieve the oldest item
     get_task_response_1 = requests.get(ENDPOINT + f"/meme/{id_1}")
     assert get_task_response_1.status_code == 200
@@ -57,7 +55,6 @@ def test_can_read():
     assert get_task_data["current_meme"]["url"] == payload_2
     assert get_task_data["previous_meme_id"] == id_1
     assert get_task_data["next_meme_id"] == id_1
-
 
     # Delete the items
     delete_task_response = requests.delete(ENDPOINT + F"/meme/{id_1}")
