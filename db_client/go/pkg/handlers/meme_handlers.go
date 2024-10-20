@@ -3,10 +3,12 @@ package handlers
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -126,11 +128,7 @@ func GetAllMemes(ctx context.Context, db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		rows, err := db.QueryContext(ctx, "SELECT * FROM memes")
 		if err != nil {
-			if err == sql.ErrNoRows {
-				writeErr(c, http.StatusNoContent, "There are no memes in the database")
-			} else {
-				writeErr(c, http.StatusInternalServerError, err.Error())
-			}
+			writeErr(c, http.StatusInternalServerError, err.Error())
 			return
 		}
 
@@ -143,6 +141,10 @@ func GetAllMemes(ctx context.Context, db *sql.DB) gin.HandlerFunc {
 			}
 
 			memes = append(memes, meme)
+		}
+
+		if len(memes) == 0 {
+			writeErr(c, http.StatusNoContent, "There are no memes in the database")
 		}
 
 		c.JSON(http.StatusOK, memes)
@@ -199,6 +201,49 @@ func DeleteMeme(ctx context.Context, db *sql.DB) gin.HandlerFunc {
 
 func UpdateMeme(ctx context.Context, db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		reqBytes, err := io.ReadAll(c.Request.Body)
+		if err != nil {
+			writeErr(c, http.StatusInternalServerError, err.Error())
+			return
+		}
+		defer c.Request.Body.Close()
 
+		var meme Meme
+		if err := json.Unmarshal(reqBytes, &meme); err != nil {
+			writeErr(c, http.StatusBadRequest, "ERROR: Unable to parse JSON\n"+err.Error())
+			return
+		}
+
+		// Make sure that the request payload has the necessary data
+		var errString []string
+		if meme.ID <= 0 {
+			errString = append(errString, "ERROR: JSON missing 'id'")
+		}
+		if len(meme.URL) == 0 {
+			errString = append(errString, "ERROR: JSON missing 'url'")
+		}
+		if len(errString) != 0 {
+			writeErr(c, http.StatusBadRequest, strings.Join(errString, "\n"))
+			return
+		}
+
+		result, err := db.ExecContext(ctx, "UPDATE memes SET url = $1 WHERE id = $2", meme.URL, meme.ID)
+		if err != nil {
+			writeErr(c, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		rowsAffected, err := result.RowsAffected()
+		if err != nil {
+			writeErr(c, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		if rowsAffected == 0 {
+			writeErr(c, http.StatusBadRequest, fmt.Sprintf("ERROR: The requested ID %d doesn't exist", meme.ID))
+			return
+		}
+
+		c.Status(http.StatusOK)
 	}
 }

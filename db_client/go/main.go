@@ -32,6 +32,7 @@ func main() {
 	r.GET("/meme/:meme_id", handlers.GetMeme(ctx, db))
 	r.PUT("/meme", handlers.PutMeme(ctx, db))
 	r.DELETE("/meme/:meme_id", handlers.DeleteMeme(ctx, db))
+	r.POST("/meme", handlers.UpdateMeme(ctx, db))
 	r.Run(":8080")
 }
 
