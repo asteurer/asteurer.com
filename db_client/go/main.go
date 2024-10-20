@@ -29,9 +29,9 @@ func main() {
 	r := gin.Default()
 	r.GET("/all_memes", handlers.GetAllMemes(ctx, db))
 	r.GET("/latest_meme", handlers.GetMeme(ctx, db))
-	r.GET("/:meme_id", handlers.GetMeme(ctx, db))
+	r.GET("/meme/:meme_id", handlers.GetMeme(ctx, db))
 	r.PUT("/meme", handlers.PutMeme(ctx, db))
-	r.DELETE("/:meme_id", handlers.DeleteMeme(ctx, db))
+	r.DELETE("/meme/:meme_id", handlers.DeleteMeme(ctx, db))
 	r.Run(":8080")
 }
 

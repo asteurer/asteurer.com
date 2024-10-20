@@ -17,9 +17,9 @@ type Meme struct {
 }
 
 type GetMemeResult struct {
-	CurrentMeme    Meme `json:"currentMeme"`
-	PreviousMemeID int  `json:"previousMemeID"`
-	NextMemeID     int  `json:"nextMemeID"`
+	CurrentMeme    Meme `json:"current_meme"`
+	PreviousMemeID int  `json:"previous_meme_id"`
+	NextMemeID     int  `json:"next_meme_id"`
 }
 
 func writeErr(c *gin.Context, statusCode int, msg string) {
@@ -149,7 +149,7 @@ func GetAllMemes(ctx context.Context, db *sql.DB) gin.HandlerFunc {
 	}
 }
 
-// PutMeme inserts a URL into the database
+// PutMeme inserts a URL into the database and returns the ID of the new entry
 func PutMeme(ctx context.Context, db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		url, err := io.ReadAll(c.Request.Body)
@@ -159,24 +159,17 @@ func PutMeme(ctx context.Context, db *sql.DB) gin.HandlerFunc {
 		}
 		defer c.Request.Body.Close()
 
-		tx, err := db.Begin()
-		if err != nil {
-			writeErr(c, http.StatusInternalServerError, err.Error())
-			return
-		}
-		defer tx.Rollback()
-
-		if _, err := tx.ExecContext(ctx, "INSERT INTO memes (url) VALUES($1)", url); err != nil {
+		var id int
+		if err := db.QueryRowContext(ctx, "INSERT INTO memes (url) VALUES($1) RETURNING id", string(url)).Scan(&id); err != nil {
 			writeErr(c, http.StatusInternalServerError, err.Error())
 			return
 		}
 
-		if err := tx.Commit(); err != nil {
-			writeErr(c, http.StatusInternalServerError, err.Error())
-			return
-		}
+		response := struct {
+			ID int `json:"id"`
+		}{ID: id}
 
-		c.Status(http.StatusOK)
+		c.JSON(http.StatusOK, response)
 	}
 }
 
@@ -201,5 +194,11 @@ func DeleteMeme(ctx context.Context, db *sql.DB) gin.HandlerFunc {
 		}
 
 		c.Status(http.StatusOK)
+	}
+}
+
+func UpdateMeme(ctx context.Context, db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+
 	}
 }
