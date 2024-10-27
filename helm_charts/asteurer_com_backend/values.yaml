@@ -1,0 +1,38 @@
+memes:
+  # The value with which each Kubernetes resource will be prefixed
+  prefix: asteurer-com
+
+  database:
+    image: postgres:17
+    secrets:
+    # secrets.name is intended to be the environment variable name.
+    # Kubernetes seems not to like underscores and upper-case,
+    # so we capitalize and change the hyphens to underscores in the Helm template.
+    - name: postgres-password
+      path: vaults/asteurer.com_PROD/items/apps
+      key: postgres_password
+    - name: postgres-user
+      path: vaults/asteurer.com_PROD/items/apps
+      key: postgres_user
+
+  client:
+    image: ghcr.io/asteurer/asteurer.com-db-client
+
+  manager:
+    image: ghcr.io/asteurer/asteurer.com-meme-manager
+    secrets:
+      - name: aws-access-key
+        path: vaults/asteurer.com_PROD/items/apps
+        key: aws_access_key_id
+      - name: aws-secret-key
+        path: vaults/asteurer.com_PROD/items/apps
+        key: aws_secret_access_key
+      - name: aws-s3-region
+        path: vaults/asteurer.com_PROD/items/apps
+        key: s3_region
+      - name: aws-s3-bucket
+        path: vaults/asteurer.com_PROD/items/apps
+        key: s3_bucket
+      - name: tg-bot-token
+        path: vaults/asteurer.com_PROD/items/apps
+        key: telegram_bot_token

@@ -4,9 +4,9 @@
 // Check if a specific meme ID is provided via GET parameter
 if (isset($_GET['id'])) {
     $current_meme_id = intval($_GET['id']);
-    $api_url = "https://asteurer.com/memes-api/{$current_meme_id}";
+    $api_url = "http://10.0.0.4:30080/meme/{$current_meme_id}";
 } else {
-    $api_url = "https://asteurer.com/memes-api/";
+    $api_url = "http://10.0.0.4:30080/latest_meme";
 }
 
 // Fetch the JSON data from the API
@@ -22,18 +22,19 @@ if ($data === null) {
 }
 
 // Extract current meme, previous and next IDs
-$current_meme = $data['currentMeme'];
-$previous_meme_id = $data['previousMemeID'];
-$next_meme_id = $data['nextMemeID'];
+$current_meme = $data['current_meme'];
+$previous_meme_id = $data['previous_meme_id'];
+$next_meme_id = $data['next_meme_id'];
 
 // Construct the previous and next meme URLs
 // Update these links to point to /meme/{id}
 $previous_link = "/memes/{$previous_meme_id}";
 $next_link = "/memes/{$next_meme_id}";
 
-// Display the current meme and navigation links
-echo "<img src='" . htmlspecialchars($current_meme['url']) . "' alt='Meme Image' width='600'><br><br>";
-
 echo "<a href='{$previous_link}'>Previous Meme</a> | ";
 echo "<a href='{$next_link}'>Next Meme</a>";
+echo "<br><br>";
+
+// Display the current meme and navigation links
+echo "<img src='" . htmlspecialchars($current_meme['url']) . "' alt='Meme Image' width='600'><br><br>";
 ?>
