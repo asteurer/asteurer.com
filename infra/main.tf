@@ -4,7 +4,7 @@
 
 terraform {
   required_providers {
-   aws = {
+    aws = {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
@@ -37,7 +37,7 @@ variable "ssh_public_key" {
 }
 
 variable "domain" {
-    type = string
+  type = string
 }
 
 variable "cloudflare_zone_id" {
@@ -49,7 +49,7 @@ variable "cloudflare_api_token" {
 }
 
 locals {
-  name_tag = {"Name" = "${var.domain}"}
+  name_tag = { "Name" = "${var.domain}" }
 }
 
 #################################################################################
@@ -77,10 +77,10 @@ data "aws_ami" "ubuntu" {
 }
 
 resource "aws_key_pair" "prod" {
-    key_name   = var.domain
-    public_key = var.ssh_public_key
+  key_name   = var.domain
+  public_key = var.ssh_public_key
 
-    tags       = local.name_tag
+  tags = local.name_tag
 }
 
 #--------------------------------------------------------------------------------
@@ -90,7 +90,7 @@ resource "aws_key_pair" "prod" {
 resource "aws_vpc" "prod" {
   cidr_block = "10.0.0.0/16"
 
-  tags       = local.name_tag
+  tags = local.name_tag
 }
 
 resource "aws_subnet" "public" {
@@ -98,13 +98,13 @@ resource "aws_subnet" "public" {
   availability_zone = "${var.aws_region}a"
   cidr_block        = "10.0.0.0/24"
 
-  tags              =  local.name_tag
+  tags = local.name_tag
 }
 
 resource "aws_internet_gateway" "prod" {
   vpc_id = aws_vpc.prod.id
 
-  tags   =  local.name_tag
+  tags = local.name_tag
 
 }
 
@@ -116,7 +116,7 @@ resource "aws_route_table" "prod" {
     gateway_id = aws_internet_gateway.prod.id
   }
 
-  tags =  local.name_tag
+  tags = local.name_tag
 
 }
 
@@ -272,7 +272,7 @@ resource "aws_security_group" "sg_nginx" {
 #################################################################################
 
 resource "aws_s3_bucket" "static_files" {
-  bucket = "${var.domain}-prod"
+  bucket        = "${var.domain}-prod"
   force_destroy = true
 }
 
@@ -281,8 +281,8 @@ resource "aws_s3_bucket_public_access_block" "static_files" {
   bucket = aws_s3_bucket.static_files.id
 
   # Block all public ACLs
-  block_public_acls       = true
-  ignore_public_acls      = true
+  block_public_acls  = true
+  ignore_public_acls = true
 
   # Allow public bucket policies
   block_public_policy     = false
@@ -330,23 +330,23 @@ resource "aws_iam_group" "prod" {
 
 data "aws_iam_policy_document" "bucket_permissions" {
   statement {
-    sid = "BucketLevelPermissions"
+    sid       = "BucketLevelPermissions"
     effect    = "Allow"
-    actions = ["s3:ListBucket"]
+    actions   = ["s3:ListBucket"]
     resources = [aws_s3_bucket.static_files.arn]
   }
 
   statement {
-    sid = "ObjectLevelPermissions"
-    effect = "Allow"
-    actions = ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"]
+    sid       = "ObjectLevelPermissions"
+    effect    = "Allow"
+    actions   = ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"]
     resources = ["${aws_s3_bucket.static_files.arn}/*"]
   }
 }
 
 resource "aws_iam_group_policy" "bucket_permissions" {
-  name = "S3GetPutDelete"
-  group = aws_iam_group.prod.name
+  name   = "S3GetPutDelete"
+  group  = aws_iam_group.prod.name
   policy = data.aws_iam_policy_document.bucket_permissions.json
 }
 
@@ -356,12 +356,12 @@ resource "aws_iam_access_key" "prod" {
 
 output "access_key_id" {
   sensitive = true
-  value = aws_iam_access_key.prod.id
+  value     = aws_iam_access_key.prod.id
 }
 
 output "secret_access_key" {
   sensitive = true
-  value = aws_iam_access_key.prod.secret
+  value     = aws_iam_access_key.prod.secret
 }
 
 resource "aws_iam_user_group_membership" "prod_user" {
@@ -383,7 +383,7 @@ resource "cloudflare_record" "root" {
   type    = "A"
   ttl     = 300
 
-  depends_on = [ aws_instance.nginx ]
+  depends_on = [aws_instance.nginx]
 }
 
 resource "cloudflare_record" "www" {
@@ -393,5 +393,5 @@ resource "cloudflare_record" "www" {
   type    = "A"
   ttl     = 300
 
-  depends_on = [ aws_instance.nginx ]
+  depends_on = [aws_instance.nginx]
 }
