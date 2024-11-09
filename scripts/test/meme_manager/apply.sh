@@ -1,5 +1,7 @@
 #!/bin/bash
 
+docker stop $(docker ps | awk '/website-test/ {print $1}') > /dev/null 2>&1
+
 # Exporting for Terraform
 export AWS_ACCESS_KEY_ID=$(op item get aws_asteurer_temp --fields label=access_key --reveal)
 export AWS_SECRET_ACCESS_KEY=$(op item get aws_asteurer_temp --fields label=secret_access_key --reveal)
@@ -16,10 +18,7 @@ terraform -chdir=$script_dir apply \
   --var=bucket_name=$bucket_name \
   --auto-approve
 
-# Allow the infra to initialize...
-sleep 15
-
-docker system prune -f
+docker rm -f asteurer.com-meme-manager
 docker build ./meme_manager -t asteurer.com-meme-manager
 docker build ./db_client -t asteurer.com-db-client
 
@@ -27,7 +26,7 @@ cat <<EOF | docker compose -f - up -d
 services:
   postgres:
     image: postgres
-    container_name: postgres
+    container_name: website-test-postgres
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -40,7 +39,7 @@ services:
       - db-network
   db-client:
     image: asteurer.com-db-client
-    container_name: db-client
+    container_name: website-test-db-client
     environment:
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
@@ -56,14 +55,14 @@ services:
       - db-network
   meme-manager:
     image: asteurer.com-meme-manager
-    container_name: meme-manager
+    container_name: website-test-meme-manager
     environment:
       - AWS_ACCESS_KEY=$(terraform -chdir=$script_dir output -json | jq -r .access_key_id.value)
       - AWS_SECRET_KEY=$(terraform -chdir=$script_dir output -json | jq -r .secret_access_key.value)
       - AWS_S3_REGION=$region
       - AWS_S3_BUCKET=$bucket_name
       - TG_BOT_TOKEN=$(op item get tg_bot --vault asteurer.com_DEV --fields label=credential --reveal)
-      - DB_CLIENT_URL=http://db-client:8080/meme
+      - DB_CLIENT_URL=http://website-test-db-client:8080/meme
     ports:
       - "8080:8080"
     depends_on:
