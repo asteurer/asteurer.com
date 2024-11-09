@@ -160,10 +160,8 @@ func handleUpdate(update tgbotapi.Update) {
 	}
 }
 
-// handleMessage reads a message sent to the Bot.
-// If the message is an image, it places it in S3.
-// If the message is a /del request, it deletes the image
-// from the database and S3
+// handleMessage reads a message sent to the Bot. If the message is an image, it places it in S3.
+// If the message is a /del request, it deletes the image from the database and S3
 func handleMessage(message *tgbotapi.Message) {
 	replyToBot := func(text string) {
 		msg := tgbotapi.NewMessage(message.Chat.ID, text)
@@ -187,7 +185,7 @@ func handleMessage(message *tgbotapi.Message) {
 			log.Println(err)
 		}
 
-		if err := sendImageToS3(imageData); err != nil {
+		if err := processImage(imageData); err != nil {
 			replyToBot("ERROR: Unable to place image in S3")
 			log.Println(err)
 		}
@@ -254,8 +252,8 @@ func retrieveImage(message *tgbotapi.Message) ([]byte, error) {
 	return fileBytes, nil
 }
 
-// sendImageToS3 compresses the image, places it in an S3 bucket, and returns the S3 URL to the image
-func sendImageToS3(imageBytes []byte) error {
+// processImage compresses the image, places it in an S3 bucket, and places the corresponding S3 URL in Postgres
+func processImage(imageBytes []byte) error {
 	key := "memes/" + fmt.Sprintf("%d", time.Now().UnixNano()) + ".webp"
 	url := "https://s3." + cfg.S3Region + ".amazonaws.com/" + cfg.S3Bucket + "/" + key
 
