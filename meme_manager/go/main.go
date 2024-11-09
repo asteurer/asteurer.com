@@ -3,11 +3,13 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -26,6 +28,13 @@ type Config struct {
 	S3Client    *s3.Client
 	Bot         *tgbotapi.BotAPI
 	DBClientURL string
+}
+
+type GetMemeResult struct {
+	CurrentMeme struct {
+		ID  int    `json:"id"`
+		URL string `json:"url"`
+	} `json:"current_meme"`
 }
 
 var cfg Config
@@ -50,6 +59,7 @@ func main() {
 	select {}
 }
 
+// parseEnvVars places all environment variable data where it belongs
 func parseEnvVars() error {
 	errMsg := func(varName string) string {
 		return "ERROR: Could not detect the " + varName + " environment variable"
@@ -128,6 +138,7 @@ func parseEnvVars() error {
 	return nil
 }
 
+// receiveUpdates checks for new messages sent to the Bot
 func receiveUpdates(ctx context.Context, updates tgbotapi.UpdatesChannel) {
 	for {
 		select {
@@ -149,22 +160,63 @@ func handleUpdate(update tgbotapi.Update) {
 	}
 }
 
-// handleMessage
+// handleMessage reads a message sent to the Bot.
+// If the message is an image, it places it in S3.
+// If the message is a /del request, it deletes the image
+// from the database and S3
 func handleMessage(message *tgbotapi.Message) {
+	replyToBot := func(text string) {
+		msg := tgbotapi.NewMessage(message.Chat.ID, text)
+		_, err := cfg.Bot.Send(msg)
+		if err != nil {
+			log.Println("Failed to send message:", err)
+		}
+	}
+
 	user := message.From
 	if user == nil {
 		return
 	}
 
+	// Handle sent photo
 	image := message.Photo
 	if image != nil {
 		imageData, err := retrieveImage(message)
 		if err != nil {
-			log.Fatal(err)
+			replyToBot("ERROR: Unable to retrieve image from telegram")
+			log.Println(err)
 		}
 
 		if err := sendImageToS3(imageData); err != nil {
-			log.Fatal(err)
+			replyToBot("ERROR: Unable to place image in S3")
+			log.Println(err)
+		}
+
+		replyToBot("Image was successfully delivered")
+	}
+
+	// Handle delete command
+	cmd := message.Command()
+	var deleteCmdArgs string
+	if cmd == "del" || cmd == "delete" {
+		deleteCmdArgs = message.CommandArguments()
+	}
+
+	if deleteCmdArgs != "" {
+		argArray := strings.Split(deleteCmdArgs, " ")
+		for _, idStr := range argArray {
+			id, err := strconv.Atoi(idStr)
+			if err != nil {
+				replyToBot(fmt.Sprintf("ERROR: %q is not an integer", idStr))
+				continue
+			}
+
+			if err := deleteMeme(id); err != nil {
+				replyToBot(fmt.Sprintf("ERROR: %v", err))
+				continue
+			}
+
+			replyToBot("ID " + idStr + " was successfully deleted")
 		}
 	}
 }
@@ -253,19 +305,61 @@ func sendImageToS3(imageBytes []byte) error {
 	return nil
 }
 
-/*
-* Some notes about deleteMeme:
-* Consider adding a feature that will list all keys in S3, drop the table in postgres, create a new table, then re-fill the table with the keys from S3.
-* The idea here is that we would do a re-indexing if I wanted to delete a meme.
- */
+// deleteMeme deletes the meme with the corresponding ID from S3 and its database entry
+func deleteMeme(id int) error {
+	// Retrieve S3 URL
+	client := &http.Client{}
+	url := fmt.Sprintf("%s/%d", cfg.DBClientURL, id)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
 
-// func deleteMeme(id int) error {
-// 	urlParts := strings.Split(memeURL, "/")
-// 	s3ObjectName := urlParts[len(urlParts)-1]
-// 	// Delete the meme from S3
-// 	deleteParams := &s3.DeleteObjectInput{Bucket: aws.String(cfg.S3Bucket), Key: aws.String("memes/" + s3ObjectName)}
-// 	if _, err := s3Client.DeleteObject(cfg.Context, deleteParams); err != nil {
-// 		writeErr(c, http.StatusInternalServerError, err.Error())
-// 		return
-// 	}
-// }
+	respBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("Unable to read response bytes.\n%v", err)
+	}
+	resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("BAD STATUS: %d", resp.StatusCode)
+	}
+
+	var meme GetMemeResult
+	if err := json.Unmarshal(respBytes, &meme); err != nil {
+		return err
+	}
+
+	// Delete the meme from S3
+	urlParts := strings.Split(meme.CurrentMeme.URL, cfg.S3Bucket+"/") // Split the string by 'bucket-name/'
+	objData := s3.DeleteObjectInput{
+		Bucket: aws.String(cfg.S3Bucket),
+		Key:    aws.String(urlParts[1]), // Everything after 'bucket-name/'
+	}
+
+	if _, err := cfg.S3Client.DeleteObject(cfg.Context, &objData); err != nil {
+
+		return err
+	}
+
+	// Delete the meme URL from the database
+	url = fmt.Sprintf("%s/%d", cfg.DBClientURL, id)
+	req, err = http.NewRequest("DELETE", url, nil)
+	if err != nil {
+		return err
+	}
+
+	if _, err := client.Do(req); err != nil {
+		return err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("BAD STATUS: %d", resp.StatusCode)
+	}
+
+	return nil
+}
