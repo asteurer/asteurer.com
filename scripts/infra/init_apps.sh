@@ -41,10 +41,10 @@ EOF
 cat << EOF > $work_dir/compose.yaml
 name: asteurer.com
 services:
-  # nginx:
-    # image: nginx:1.27
-  # front_end:
-    # image: ghcr.io/asteurer/asteurer.com-front-end
+  nginx:
+    image: ghcr.io/asteurer/asteurer.com-front-end
+    ports:
+      - 8080:8080
   meme-manager:
     image: ghcr.io/asteurer/asteurer.com-meme-manager
     environment:
@@ -53,7 +53,7 @@ services:
       - AWS_S3_REGION=$AWS_S3_REGION
       - AWS_S3_BUCKET=$AWS_S3_BUCKET
       - TG_BOT_TOKEN=$TG_BOT_TOKEN
-      - DB_CLIENT_URL=http://db-client:8080
+      - DB_CLIENT_URL=http://db-client:8080/meme
   db-client:
     image: ghcr.io/asteurer/asteurer.com-db-client
     environment:
