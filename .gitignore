@@ -6,20 +6,26 @@
 #-----------------------
 # Svelte
 #-----------------------
-# Logs
-front_end/logs
-front_end/*.log
-front_end/npm-debug.log*
-front_end/yarn-debug.log*
-front_end/yarn-error.log*
-front_end/pnpm-debug.log*
-front_end/lerna-debug.log*
-
 front_end/node_modules
-front_end/dist
-front_end/dist-ssr
-front_end/*.local
 
-# Editor directories and files
-front_end/.vscode/.*
-front_end/.vscode/*
+# Output
+front_end/.output
+front_end/.vercel
+front_end/.netlify
+front_end/.wrangler
+front_end/.svelte-kit
+front_end/build
+
+# OS
+front_end/.DS_Store
+front_end/Thumbs.db
+
+# Env
+front_end/.env
+front_end/.env.*
+!front_end/.env.example
+!front_end/.env.test
+
+# Vite
+front_end/vite.config.js.timestamp-*
+front_end/vite.config.ts.timestamp-*

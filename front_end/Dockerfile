@@ -1,24 +1,21 @@
-FROM node:22.14 AS builder
-
+FROM node:22.14-slim AS builder
 WORKDIR /app
-
 COPY package*.json ./
-
 RUN npm install
-
+RUN npm install --save-dev @sveltejs/adapter-node
 COPY . .
-
 RUN npm run build
 
-FROM nginx:1.27-alpine3.21
+FROM node:22.14-slim
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --prod
+COPY --from=builder /app/build ./build
+COPY --from=builder /app/package.json ./package.json
 
-# Remove default nginx config
-RUN rm /etc/nginx/conf.d/default.conf
+EXPOSE 8080
 
-# Copy built Svelte assets from builder stage
-COPY --from=builder /app/dist /usr/share/nginx/html
+ENV NODE_ENV=production
+ENV PORT=8080
 
-# TODO: Create custom nginx file
-COPY nginx/nginx.conf /etc/nginx/conf.d
-
-EXPOSE 80 443
+CMD [ "node", "build" ]
