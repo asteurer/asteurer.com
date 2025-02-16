@@ -1,5 +1,25 @@
 *.tfstate*
 *.terraform*
 *tfplan*
-venv/
-*py*cache*
+*.env
+
+#-----------------------
+# Svelte
+#-----------------------
+# Logs
+front_end/logs
+front_end/*.log
+front_end/npm-debug.log*
+front_end/yarn-debug.log*
+front_end/yarn-error.log*
+front_end/pnpm-debug.log*
+front_end/lerna-debug.log*
+
+front_end/node_modules
+front_end/dist
+front_end/dist-ssr
+front_end/*.local
+
+# Editor directories and files
+front_end/.vscode/.*
+front_end/.vscode/*
