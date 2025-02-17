@@ -12,6 +12,11 @@
 <img alt="Current Meme" src={data.current_meme.url}>
 
 <style>
+  img {
+    max-width: 100%;
+    height: auto;
+  }
+
 	a {
 	  margin-right: 1rem;  /* Adds spacing between links */
 	}
