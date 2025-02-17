@@ -8,7 +8,7 @@
     <li><a href="https://github.com/asteurer">Click here</a> for my Github</li>
 </ul>
 
-<h3>Blog Posts About Code I Wrote</h3>
+<h3>Blog Posts</h3>
 <ul>
   <li><a href="https://www.fermyon.com/blog/spinkube-on-kairos">Using SpinKube on Kairos</a></li>
   <li><a href="https://fermyon.com/blog/api-testing-demo">Automating API endpoint testing with Spin</a></li>
