@@ -41,7 +41,7 @@ EOF
 cat << EOF > $work_dir/compose.yaml
 name: asteurer.com
 services:
-  nginx:
+  front-end:
     image: ghcr.io/asteurer/asteurer.com-front-end
     ports:
       - 8080:8080

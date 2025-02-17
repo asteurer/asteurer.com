@@ -1,6 +1,6 @@
 #!/bin/bash
 
-docker stop $(docker ps | awk '/website-test/ {print $1}') > /dev/null 2>&1
+sudo docker stop $(sudo docker ps | awk '/website-test/ {print $1}') > /dev/null 2>&1
 
 # Exporting for Terraform
 export AWS_ACCESS_KEY_ID=$(op item get aws_asteurer_temp --fields label=access_key --reveal)
@@ -18,11 +18,11 @@ terraform -chdir=$script_dir apply \
   --var=bucket_name=$bucket_name \
   --auto-approve
 
-docker rm -f asteurer.com-meme-manager
-docker build ./meme_manager -t asteurer.com-meme-manager
-docker build ./db_client -t asteurer.com-db-client
+sudo docker rm -f asteurer.com-meme-manager
+sudo docker build ./meme_manager -t asteurer.com-meme-manager
+sudo docker build ./db_client -t asteurer.com-db-client
 
-cat <<EOF | docker compose -f - up -d
+cat <<EOF | sudo docker compose -f - up -d
 services:
   postgres:
     image: postgres
