@@ -1,22 +1,26 @@
 # Overview
-
 This is the source code for [asteurer.com](https://asteurer.com).
+
+## Features
+- I am able to text meme images to a Telegram bot, and the memes will be accessible on the website
 
 ## Technologies
 
-- The infrastructure for this website is managed with ***Terraform***, which was chosen because the project uses resources from both ***AWS*** and ***CloudFlare***.
-- Various ***Python*** and ***Bash*** scripts were written so the website could be up-and-running from scratch in less than 10 minutes.
-- The front-end of the project is PHP and HTML files served via ***NGINX***, and encrypted with ***TLS certificates***.
-- The back-end portion is a ***Kubernetes*** cluster, running a ***Helm*** deployment containing ***Postgres*** and ***Golang*** applications.
-- ***Secrets automation*** is accomplished using 1Password's CLI and Kubernetes Connect Server.
+- The website is run on a ***Fedora Linux*** virtual machine on a server in my apartment, and is accessible via ***Cloudflare Tunnels***.
+- ***Terraform*** is used to spin up an ***AWS S3*** bucket with an accompanying service account for the `meme-manager` application
+- I used ***Svelte*** (a JavaScript framework) for the front end.
+- The back-end portion is a ***Docker Compose*** stack running ***Postgres*** and ***Golang*** applications.
+- The `db-client` application has ***automated tests***
+- In the `Makefile`, I automated various repetitive tasks, improving my development workflow
 
 ## Design
-![image](README_files/general_diagram.png)
+![image](README_files/diagram.svg)
 
 ### Telegram Bot and meme-manager
 - Sending image data to S3 via an API was tedious and exposed PUT and DELETE operations to the public internet. Telegram made it possible to manage the image data by pulling from Telegram's servers via `meme-manager`, rather than having to manage authentication for pushing directly to the website's servers.
 
-### NGINX, S3 bucket, and db-client
-- When visiting the [meme gallery](https://asteurer.com/memes), the PHP queries the `db-client` via a private IP address, which then returns a doubly-linked list node containing the S3 URL for a particular meme, and the IDs for the previous and next meme relative to the particular meme. This allows for stateful-like behavior from a stateless application.
+### Front end state management
+- I wanted a user to be able to traverse memes and retrace their steps without having to store any session data. I decided to use a linked-list, and routes as a way to retrieve the image data for the previous and next memes.
 
-- S3 was intentionally configured to allow public GET requests. This allowed for NGINX to serve HTML and the client to retrieve the image data directly from S3, rather than making unnecessary steps to retrieve the image data from S3 via NGINX.
+### Cloudflare Tunnels
+- I used Cloudflare Tunnels because I wanted to host my website on my home server, but I didn't want to have to expose my home IP address or manage a complex firewall.

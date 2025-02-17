@@ -1,5 +1,42 @@
+*.env
+
+#-----------------------
+# PyTest
+#-----------------------
+*__pycache__
+*.pytest_cache
+*venv
+
+#-----------------------
+# Terraform
+#-----------------------
 *.tfstate*
 *.terraform*
 *tfplan*
-venv/
-*py*cache*
+
+#-----------------------
+# Svelte
+#-----------------------
+front_end/node_modules
+
+# Output
+front_end/.output
+front_end/.vercel
+front_end/.netlify
+front_end/.wrangler
+front_end/.svelte-kit
+front_end/build
+
+# OS
+front_end/.DS_Store
+front_end/Thumbs.db
+
+# Env
+front_end/.env
+front_end/.env.*
+!front_end/.env.example
+!front_end/.env.test
+
+# Vite
+front_end/vite.config.js.timestamp-*
+front_end/vite.config.ts.timestamp-*

@@ -6,10 +6,10 @@ python3 -m venv ./venv
 source ./venv/bin/activate
 pip install -r ./$script_dir/requirements.txt
 
-docker system prune -f
-docker build ./db_client -t asteurer.com-db-client
+sudo docker system prune -f
+sudo docker build ./db_client -t asteurer.com-db-client
 
-cat <<EOF | docker compose -f - up -d
+cat <<EOF | sudo docker compose -f - up -d
 services:
   postgres:
     image: postgres
@@ -51,4 +51,4 @@ sleep 10
 pytest
 
 # This will run, even if pytest fails
-docker stop $(docker ps | awk '/test-db-client/ {print $1}')
+sudo docker stop $(sudo docker ps | awk '/test-db-client/ {print $1}')

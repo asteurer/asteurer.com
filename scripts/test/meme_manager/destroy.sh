@@ -13,4 +13,4 @@ terraform -chdir=scripts/test/meme_manager destroy \
   --var=bucket_name=$bucket_name \
   --auto-approve
 
-docker stop $(docker ps | awk '/website-test/ {print $1}')
+sudo docker stop $(sudo docker ps | awk '/website-test/ {print $1}')
