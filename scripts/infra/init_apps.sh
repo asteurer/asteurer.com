@@ -18,6 +18,7 @@ validate_env "AWS_SECRET_KEY"
 validate_env "AWS_S3_REGION"
 validate_env "AWS_S3_BUCKET"
 validate_env "TG_BOT_TOKEN"
+validate_env "CF_TOKEN"
 
 #-----------------------------------
 # Initialize the working directory
@@ -72,7 +73,9 @@ services:
     volumes:
         - ./init.sql:/docker-entrypoint-initdb.d/init.sql
         - postgres_data:/var/lib/postgresql/data
-
+  cf-tunnel:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate run --token $CF_TOKEN
 volumes:
     postgres_data:
 EOF
