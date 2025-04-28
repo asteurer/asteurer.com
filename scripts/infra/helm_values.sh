@@ -1,6 +1,6 @@
 #!/bin/bash
-read -p "Path to env file: " env_file_path
 
+read -p "Path to env file: " env_file_path
 source $env_file_path
 
 # validate_env ensures that the passed string matches a non-empty environment variable
