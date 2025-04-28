@@ -46,6 +46,8 @@ services:
     image: ghcr.io/asteurer/asteurer.com-front-end
     ports:
       - 8080:8080
+    environment:
+      - API_URL=http://db-client:8080
   meme-manager:
     image: ghcr.io/asteurer/asteurer.com-meme-manager
     environment:

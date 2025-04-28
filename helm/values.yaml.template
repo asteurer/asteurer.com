@@ -1,0 +1,34 @@
+frontEnd:
+  image: ghcr.io/asteurer/asteurer.com-front-end
+
+database:
+  image: postgres:17
+  secrets:
+  # secrets.name is intended to be the environment variable name.
+  # Kubernetes seems not to like underscores and upper-case,
+  # so we capitalize and change the hyphens to underscores in the Helm template.
+  - name: postgres-password
+    value: <FILLED_IN_BY_SCRIPT>
+  - name: postgres-user
+    value: <FILLED_IN_BY_SCRIPT>
+
+dbClient:
+  image: ghcr.io/asteurer/asteurer.com-db-client
+
+memeManager:
+  image: ghcr.io/asteurer/asteurer.com-meme-manager
+  secrets:
+  - name: aws-access-key
+    value: <FILLED_IN_BY_SCRIPT>
+  - name: aws-secret-key
+    value: <FILLED_IN_BY_SCRIPT>
+  - name: aws-s3-region
+    value: <FILLED_IN_BY_SCRIPT>
+  - name: aws-s3-bucket
+    value: <FILLED_IN_BY_SCRIPT>
+  - name: tg-bot-token
+    value: <FILLED_IN_BY_SCRIPT>
+
+cloudflared:
+  image: cloudflare/cloudflared:2025.4.0
+  token: <FILLED_IN_BY_SCRIPT>

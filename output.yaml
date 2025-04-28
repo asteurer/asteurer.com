@@ -1,0 +1,273 @@
+---
+# Source: asteurer-com/templates/main.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: "asteurer-com-database-secrets"
+  namespace: default
+type: Opaque
+data:
+  postgres-password: "PEZJTExFRF9JTl9CWV9TQ1JJUFQ+"
+  postgres-user: "PEZJTExFRF9JTl9CWV9TQ1JJUFQ+"
+
+# Generating meme-manager secrets
+---
+# Source: asteurer-com/templates/main.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: "asteurer-com-meme-manager-secrets"
+  namespace: default
+type: Opaque
+data:
+  aws-access-key: "PEZJTExFRF9JTl9CWV9TQ1JJUFQ+"
+  aws-secret-key: "PEZJTExFRF9JTl9CWV9TQ1JJUFQ+"
+  aws-s3-region: "PEZJTExFRF9JTl9CWV9TQ1JJUFQ+"
+  aws-s3-bucket: "PEZJTExFRF9JTl9CWV9TQ1JJUFQ+"
+  tg-bot-token: "PEZJTExFRF9JTl9CWV9TQ1JJUFQ+"
+
+# cloudflared secrets
+---
+# Source: asteurer-com/templates/main.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: "asteurer-com-clouflared-secrets"
+  namespace: default
+type: Opaque
+data:
+  token: "PEZJTExFRF9JTl9CWV9TQ1JJUFQ+"
+---
+# Source: asteurer-com/templates/main.yaml
+# Load the schema.sql file
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: "asteurer-com-database-schema"
+data:
+  schema.sql:     CREATE TABLE memes (
+        id SERIAL PRIMARY KEY,
+        url TEXT NOT NULL UNIQUE
+    );
+
+# Generating database secrets
+---
+# Source: asteurer-com/templates/main.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: "asteurer-com-database"
+  labels:
+    app: "asteurer-com-database"
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5432
+      targetPort: 5432
+  selector:
+    app: "asteurer-com-database"
+---
+# Source: asteurer-com/templates/main.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: "asteurer-com-db-client"
+  labels:
+    app: "asteurer-com-db-client"
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8080
+      targetPort: 8080
+      nodePort: 30080
+  selector:
+    app: "asteurer-com-db-client"
+---
+# Source: asteurer-com/templates/main.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: "asteurer-com-database"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: "asteurer-com-database"
+  template:
+    metadata:
+      labels:
+        app: "asteurer-com-database"
+    spec:
+      containers:
+        - name: "asteurer-com-database"
+          image: "postgres:17"
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 5432
+          env:
+            # Creating database secretKeyRef
+            - name: "POSTGRES_PASSWORD"
+              valueFrom:
+                secretKeyRef:
+                  name: "asteurer-com-database-secrets"
+                  key: "postgres-password"
+            - name: "POSTGRES_USER"
+              valueFrom:
+                secretKeyRef:
+                  name: "asteurer-com-database-secrets"
+                  key: "postgres-user"
+          volumeMounts:
+            - mountPath: /docker-entrypoint-initdb.d/
+              name: schema-volume
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+
+      volumes:
+        - name: schema-volume
+          configMap:
+            name: "asteurer-com-database-schema"
+---
+# Source: asteurer-com/templates/main.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: "asteurer-com-db-client"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: "asteurer-com-db-client"
+  template:
+    metadata:
+      labels:
+        app: "asteurer-com-db-client"
+    spec:
+      containers:
+        - name: "asteurer-com-db-client"
+          image: "ghcr.io/asteurer/asteurer.com-db-client"
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+          env:
+            - name: POSTGRES_HOST
+              value: "asteurer-com-database"
+            - name: POSTGRES_PORT
+              value: "5432"
+            - name: POSTGRES_DATABASE
+              value: postgres
+            # Generating database secrets
+            - name: "POSTGRES_PASSWORD"
+              valueFrom:
+                secretKeyRef:
+                  name: "asteurer-com-database-secrets"
+                  key: "postgres-password"
+            - name: "POSTGRES_USER"
+              valueFrom:
+                secretKeyRef:
+                  name: "asteurer-com-database-secrets"
+                  key: "postgres-user"
+---
+# Source: asteurer-com/templates/main.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: "asteurer-com-meme-manager"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: "asteurer-com-meme-manager"
+  template:
+    metadata:
+      labels:
+        app: "asteurer-com-meme-manager"
+    spec:
+      containers:
+        - name: "asteurer-com-meme-manager"
+          image: "ghcr.io/asteurer/asteurer.com-meme-manager"
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+          env:
+            - name: DB_CLIENT_URL
+              value: "http://asteurer-com-db-client.default.svc.cluster.local:8080/meme"
+            # Generating meme-manager secrets
+            - name: "AWS_ACCESS_KEY"
+              valueFrom:
+                secretKeyRef:
+                  name: "asteurer-com-meme-manager-secrets"
+                  key: "aws-access-key"
+            - name: "AWS_SECRET_KEY"
+              valueFrom:
+                secretKeyRef:
+                  name: "asteurer-com-meme-manager-secrets"
+                  key: "aws-secret-key"
+            - name: "AWS_S3_REGION"
+              valueFrom:
+                secretKeyRef:
+                  name: "asteurer-com-meme-manager-secrets"
+                  key: "aws-s3-region"
+            - name: "AWS_S3_BUCKET"
+              valueFrom:
+                secretKeyRef:
+                  name: "asteurer-com-meme-manager-secrets"
+                  key: "aws-s3-bucket"
+            - name: "TG_BOT_TOKEN"
+              valueFrom:
+                secretKeyRef:
+                  name: "asteurer-com-meme-manager-secrets"
+                  key: "tg-bot-token"
+---
+# Source: asteurer-com/templates/main.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: "asteurer-com-front-end"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: "asteurer-com-front-end"
+  template:
+    metadata:
+      labels:
+        app: "asteurer-com-front-end"
+    spec:
+      containers:
+        - name: "asteurer-com-front-end"
+          image: "ghcr.io/asteurer/asteurer.com-front-end"
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+---
+# Source: asteurer-com/templates/main.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: "asteurer-com-cloudflared"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: "asteurer-com-cloudflared"
+  template:
+    metadata:
+      labels:
+        app: "asteurer-com-cloudflared"
+    spec:
+      containers:
+        - name: "asteurer-com-cloudflared"
+          image: "cloudflare/cloudflared:2025.4.0"
+          imagePullPolicy: Always
+          command: ["cloudflared", "tunnel", "--no-autoupdate", "run", "--token", "$(CF_TOKEN)"]
+          env:
+          - name: CF_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: "asteurer-com-cloudflared-secrets"
+                key: token
