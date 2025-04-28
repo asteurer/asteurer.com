@@ -1,13 +1,15 @@
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
+import { env } from '$env/dynamic/private';
 
 export const load: PageServerLoad = async ({ params }) => {
+
     // Parse the memeID
     if (!Number.isInteger(Number(params.memeID))) {
         throw error(400, `The memeID needs to be an integer. Received '${params.memeID}'.`);
     }
 
-    let apiURL = `http://db-client:8080/meme/${params.memeID}`;
+    let apiURL = `${env.API_URL}/meme/${params.memeID}`;
 
     // Fetch the JSON data from the API
     try {
@@ -20,6 +22,6 @@ export const load: PageServerLoad = async ({ params }) => {
         return data;
     } catch (err) {
         console.error(err);
-        throw error(500, 'Failed to load meme data');
+        throw error(500, `Failed to load meme data`);
     }
 }

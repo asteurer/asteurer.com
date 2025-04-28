@@ -1,9 +1,10 @@
 import { error } from '@sveltejs/kit';
 import type { PageLoad } from './$types';
+import { env } from '$env/dynamic/private';
 
 export const load: PageLoad = async ({ params }) => {
     // Parse the memeID and determine the apiURL
-    let apiURL = "http://db-client:8080/latest_meme";
+    let apiURL = `${env.API_URL}/latest_meme`;
 
     // Fetch the JSON data from the API
     try {
@@ -16,6 +17,6 @@ export const load: PageLoad = async ({ params }) => {
         return data;
     } catch (err) {
         console.error(err);
-        throw error(500, 'Failed to load meme data');
+        throw error(500, `Failed to load meme data`);
     }
 }
