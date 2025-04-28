@@ -1,5 +1,8 @@
 #!/bin/bash
 
+read -p "Path to env file: " env_file_path
+source $env_file_path
+
 # validate_env ensures that the passed string matches a non-empty environment variable
 validate_env() {
     # Take the string value, and see if it matches an env var key,

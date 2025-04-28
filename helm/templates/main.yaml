@@ -1,3 +1,6 @@
+# Storing root context
+{{- $root := . -}}
+
 #############################################
 ###              Database                 ###
 #############################################
@@ -6,7 +9,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: "asteurer-com-database-schema"
+  name: "{{ .Values.prefix }}-database-schema"
 data:
   schema.sql: {{ .Files.Get "files/schema.sql" | indent 4 }}
 
@@ -14,7 +17,7 @@ data:
 apiVersion: v1
 kind: Secret
 metadata:
-  name: "asteurer-com-database-secrets"
+  name: "{{ .Values.prefix }}-database-secrets"
   namespace: default
 type: Opaque
 data:
@@ -26,19 +29,19 @@ data:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: "asteurer-com-database"
+  name: "{{ .Values.prefix }}-database"
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: "asteurer-com-database"
+      app: "{{ .Values.prefix }}-database"
   template:
     metadata:
       labels:
-        app: "asteurer-com-database"
+        app: "{{ .Values.prefix }}-database"
     spec:
       containers:
-        - name: "asteurer-com-database"
+        - name: "{{ .Values.prefix }}-database"
           image: "{{ .Values.database.image }}"
           imagePullPolicy: Always
           ports:
@@ -48,7 +51,7 @@ spec:
             - name: "{{ upper .name | replace "-" "_" }}"
               valueFrom:
                 secretKeyRef:
-                  name: "asteurer-com-database-secrets"
+                  name: "{{ $root.Values.prefix }}-database-secrets"
                   key: "{{ .name }}"
             {{- end }}
           volumeMounts:
@@ -67,16 +70,16 @@ spec:
       volumes:
         - name: schema-volume
           configMap:
-            name: "asteurer-com-database-schema"
+            name: "{{ .Values.prefix }}-database-schema"
         - name: db-storage
           persistentVolumeClaim:
-            claimName: "asteurer-com-db-pvc"
+            claimName: "{{ .Values.prefix }}-db-pvc"
 
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: "asteurer-com-db-pvc"
+  name: "{{ .Values.prefix }}-db-pvc"
 spec:
   accessModes:
     - ReadWriteOnce
@@ -88,16 +91,16 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: "asteurer-com-database"
+  name: "{{ .Values.prefix }}-database"
   labels:
-    app: "asteurer-com-database"
+    app: "{{ .Values.prefix }}-database"
 spec:
   type: ClusterIP
   ports:
     - port: 5432
       targetPort: 5432
   selector:
-    app: "asteurer-com-database"
+    app: "{{ .Values.prefix }}-database"
 
 #############################################
 ###             Meme Manager              ###
@@ -107,7 +110,7 @@ spec:
 apiVersion: v1
 kind: Secret
 metadata:
-  name: "asteurer-com-meme-manager-secrets"
+  name: "{{ .Values.prefix }}-meme-manager-secrets"
   namespace: default
 type: Opaque
 data:
@@ -119,29 +122,29 @@ data:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: "asteurer-com-meme-manager"
+  name: "{{ .Values.prefix }}-meme-manager"
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: "asteurer-com-meme-manager"
+      app: "{{ .Values.prefix }}-meme-manager"
   template:
     metadata:
       labels:
-        app: "asteurer-com-meme-manager"
+        app: "{{ .Values.prefix }}-meme-manager"
     spec:
       containers:
-        - name: "asteurer-com-meme-manager"
+        - name: "{{ .Values.prefix }}-meme-manager"
           image: "{{ .Values.memeManager.image }}"
           imagePullPolicy: Always
           env:
             - name: DB_CLIENT_URL
-              value: "http://asteurer-com-db-client.default.svc.cluster.local:8080/meme"
+              value: "http://{{ .Values.prefix }}-db-client.default.svc.cluster.local:8080/meme"
             {{- range .Values.memeManager.secrets }}
             - name: "{{ upper .name | replace "-" "_"}}"
               valueFrom:
                 secretKeyRef:
-                  name: "asteurer-com-meme-manager-secrets"
+                  name: "{{ $root.Values.prefix }}-meme-manager-secrets"
                   key: "{{ .name }}"
             {{- end }}
 
@@ -153,26 +156,26 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: "asteurer-com-db-client"
+  name: "{{ .Values.prefix }}-db-client"
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: "asteurer-com-db-client"
+      app: "{{ .Values.prefix }}-db-client"
   template:
     metadata:
       labels:
-        app: "asteurer-com-db-client"
+        app: "{{ .Values.prefix }}-db-client"
     spec:
       containers:
-        - name: "asteurer-com-db-client"
+        - name: "{{ .Values.prefix }}-db-client"
           image: "{{ .Values.dbClient.image }}"
           imagePullPolicy: Always
           ports:
             - containerPort: 8080
           env:
             - name: POSTGRES_HOST
-              value: "asteurer-com-database"
+              value: "{{ .Values.prefix }}-database"
             - name: POSTGRES_PORT
               value: "5432"
             - name: POSTGRES_DATABASE
@@ -181,7 +184,7 @@ spec:
             - name: "{{ upper .name | replace "-" "_"}}"
               valueFrom:
                 secretKeyRef:
-                  name: "asteurer-com-database-secrets"
+                  name: "{{ $root.Values.prefix }}-database-secrets"
                   key: "{{ .name }}"
             {{- end }}
 
@@ -189,16 +192,16 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: "asteurer-com-db-client"
+  name: "{{ .Values.prefix }}-db-client"
   labels:
-    app: "asteurer-com-db-client"
+    app: "{{ .Values.prefix }}-db-client"
 spec:
   type: ClusterIP
   ports:
     - port: 8080
       targetPort: 8080
   selector:
-    app: "asteurer-com-db-client"
+    app: "{{ .Values.prefix }}-db-client"
 
 #############################################
 ###             Cloudflared               ###
@@ -208,7 +211,7 @@ spec:
 apiVersion: v1
 kind: Secret
 metadata:
-  name: "asteurer-com-cloudflared-secrets"
+  name: "{{ .Values.prefix }}-cloudflared-secrets"
   namespace: default
 type: Opaque
 data:
@@ -218,19 +221,19 @@ data:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: "asteurer-com-cloudflared"
+  name: "{{ .Values.prefix }}-cloudflared"
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: "asteurer-com-cloudflared"
+      app: "{{ .Values.prefix }}-cloudflared"
   template:
     metadata:
       labels:
-        app: "asteurer-com-cloudflared"
+        app: "{{ .Values.prefix }}-cloudflared"
     spec:
       containers:
-        - name: "asteurer-com-cloudflared"
+        - name: "{{ .Values.prefix }}-cloudflared"
           image: "{{ .Values.cloudflared.image }}"
           imagePullPolicy: Always
           command: ["cloudflared", "tunnel", "--no-autoupdate", "run", "--token", "$(CF_TOKEN)"]
@@ -238,7 +241,7 @@ spec:
           - name: CF_TOKEN
             valueFrom:
               secretKeyRef:
-                name: "asteurer-com-cloudflared-secrets"
+                name: "{{ .Values.prefix }}-cloudflared-secrets"
                 key: token
 
 #############################################
@@ -249,24 +252,24 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: "asteurer-com-front-end"
+  name: "{{ .Values.prefix }}-front-end"
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: "asteurer-com-front-end"
+      app: "{{ .Values.prefix }}-front-end"
   template:
     metadata:
       labels:
-        app: "asteurer-com-front-end"
+        app: "{{ .Values.prefix }}-front-end"
     spec:
       containers:
-        - name: "asteurer-com-front-end"
+        - name: "{{ .Values.prefix }}-front-end"
           image: "{{ .Values.frontEnd.image }}"
           imagePullPolicy: Always
           env:
             - name: API_URL
-              value: http://asteurer-com-db-client.default.svc.cluster.local:8080
+              value: http://{{ .Values.prefix }}-db-client.default.svc.cluster.local:8080
           ports:
             - containerPort: 8080
 
@@ -274,13 +277,13 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: "asteurer-com-front-end"
+  name: "{{ .Values.prefix }}-front-end"
   labels:
-    app: "asteurer-com-front-end"
+    app: "{{ .Values.prefix }}-front-end"
 spec:
   type: ClusterIP
   ports:
     - port: 8080
       targetPort: 8080
   selector:
-    app: "asteurer-com-front-end"
+    app: "{{ .Values.prefix }}-front-end"

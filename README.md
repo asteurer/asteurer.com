@@ -6,10 +6,11 @@ This is the source code for [asteurer.com](https://asteurer.com).
 
 ## Technologies
 
-- The website is run on a ***Fedora Linux*** virtual machine on a server in my apartment, and is accessible via ***Cloudflare Tunnels***.
+- The website is run on a ***multi-node Kubernetes cluster***, and is accessible via ***Cloudflare Tunnels***
+- ***Helm*** is used to configure and deploy the various resources needed to run the application stack
 - ***Terraform*** is used to spin up an ***AWS S3*** bucket with an accompanying service account for the `meme-manager` application
-- I used ***Svelte*** (a JavaScript framework) for the front end.
-- The back-end portion is a ***Docker Compose*** stack running ***Postgres*** and ***Golang*** applications.
+- I used ***Svelte*** (a JavaScript framework) for the front end
+- The back-end portion uses ***Postgres*** and ***Golang***
 - The `db-client` application has ***automated tests***
 - In the `Makefile`, I automated various repetitive tasks, improving my development workflow
 
@@ -23,4 +24,4 @@ This is the source code for [asteurer.com](https://asteurer.com).
 - I wanted a user to be able to traverse memes and retrace their steps without having to store any session data. I decided to use a linked-list, and routes as a way to retrieve the image data for the previous and next memes.
 
 ### Cloudflare Tunnels
-- I used Cloudflare Tunnels because I wanted to host my website on my home server, but I didn't want to have to expose my home IP address or manage a complex firewall.
+- I used Cloudflare Tunnels because I wanted to host my website on my home server, but I didn't want to expose my home IP address or manage a firewall.
