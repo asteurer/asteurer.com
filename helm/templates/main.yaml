@@ -1,0 +1,240 @@
+# Load the schema.sql file
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: "asteurer-com-database-schema"
+data:
+  schema.sql: {{ .Files.Get "files/schema.sql" | indent 4 }}
+
+# Generating database secrets
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: "asteurer-com-database-secrets"
+  namespace: default
+type: Opaque
+data:
+{{- range .Values.database.secrets }}
+  {{ .name }}: "{{ .value | b64enc }}"
+{{- end }}
+
+# Generating meme-manager secrets
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: "asteurer-com-meme-manager-secrets"
+  namespace: default
+type: Opaque
+data:
+{{- range .Values.memeManager.secrets }}
+  {{ .name }}: "{{ .value | b64enc }}"
+{{- end }}
+
+# cloudflared secrets
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: "asteurer-com-clouflared-secrets"
+  namespace: default
+type: Opaque
+data:
+  token: "{{ .Values.cloudflared.token | b64enc }}"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: "asteurer-com-database"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: "asteurer-com-database"
+  template:
+    metadata:
+      labels:
+        app: "asteurer-com-database"
+    spec:
+      containers:
+        - name: "asteurer-com-database"
+          image: "{{ .Values.database.image }}"
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 5432
+          env:
+            # Creating database secretKeyRef
+            {{- range .Values.database.secrets }}
+            - name: "{{ upper .name | replace "-" "_" }}"
+              valueFrom:
+                secretKeyRef:
+                  name: "asteurer-com-database-secrets"
+                  key: "{{ .name }}"
+            {{- end }}
+          volumeMounts:
+            - mountPath: /docker-entrypoint-initdb.d/
+              name: schema-volume
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+
+      volumes:
+        - name: schema-volume
+          configMap:
+            name: "asteurer-com-database-schema"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: "asteurer-com-db-client"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: "asteurer-com-db-client"
+  template:
+    metadata:
+      labels:
+        app: "asteurer-com-db-client"
+    spec:
+      containers:
+        - name: "asteurer-com-db-client"
+          image: "{{ .Values.dbClient.image }}"
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+          env:
+            - name: POSTGRES_HOST
+              value: "asteurer-com-database"
+            - name: POSTGRES_PORT
+              value: "5432"
+            - name: POSTGRES_DATABASE
+              value: postgres
+            # Generating database secrets
+            {{- range .Values.database.secrets }}
+            - name: "{{ upper .name | replace "-" "_"}}"
+              valueFrom:
+                secretKeyRef:
+                  name: "asteurer-com-database-secrets"
+                  key: "{{ .name }}"
+            {{- end }}
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: "asteurer-com-meme-manager"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: "asteurer-com-meme-manager"
+  template:
+    metadata:
+      labels:
+        app: "asteurer-com-meme-manager"
+    spec:
+      containers:
+        - name: "asteurer-com-meme-manager"
+          image: "{{ .Values.memeManager.image }}"
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+          env:
+            - name: DB_CLIENT_URL
+              value: "http://asteurer-com-db-client.default.svc.cluster.local:8080/meme"
+            # Generating meme-manager secrets
+            {{- range .Values.memeManager.secrets }}
+            - name: "{{ upper .name | replace "-" "_"}}"
+              valueFrom:
+                secretKeyRef:
+                  name: "asteurer-com-meme-manager-secrets"
+                  key: "{{ .name }}"
+            {{- end }}
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: "asteurer-com-front-end"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: "asteurer-com-front-end"
+  template:
+    metadata:
+      labels:
+        app: "asteurer-com-front-end"
+    spec:
+      containers:
+        - name: "asteurer-com-front-end"
+          image: "{{ .Values.frontEnd.image }}"
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: "asteurer-com-cloudflared"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: "asteurer-com-cloudflared"
+  template:
+    metadata:
+      labels:
+        app: "asteurer-com-cloudflared"
+    spec:
+      containers:
+        - name: "asteurer-com-cloudflared"
+          image: "{{ .Values.cloudflared.image }}"
+          imagePullPolicy: Always
+          command: ["cloudflared", "tunnel", "--no-autoupdate", "run", "--token", "$(CF_TOKEN)"]
+          env:
+          - name: CF_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: "asteurer-com-cloudflared-secrets"
+                key: token
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: "asteurer-com-database"
+  labels:
+    app: "asteurer-com-database"
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5432
+      targetPort: 5432
+  selector:
+    app: "asteurer-com-database"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: "asteurer-com-db-client"
+  labels:
+    app: "asteurer-com-db-client"
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8080
+      targetPort: 8080
+      nodePort: 30080
+  selector:
+    app: "asteurer-com-db-client"
