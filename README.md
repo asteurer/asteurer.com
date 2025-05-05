@@ -25,3 +25,26 @@ This is the source code for [asteurer.com](https://asteurer.com).
 
 ### Cloudflare Tunnels
 - I used Cloudflare Tunnels because I wanted to host my website on my home server, but I didn't want to expose my home IP address or manage a firewall.
+
+# For Andrew's reference
+
+## Restoring Postgres
+
+You'll need to copy the backup data to the container, delete the memes table, and then restore the data:
+
+```sh
+kubectl cp ./postgres.dump <CONTAINER ID>:/tmp/postgres.dump
+kubectl exec -it <CONTAINER ID> -- bash
+
+# The below commands are run within the postgres container
+su postgres
+psql
+
+# The below commands are run from within psql
+\c postgres
+drop table memes;
+\q
+
+# The below commands are run from within the postgres container
+pg_restore -U postgres -d postgres /tmp/postgres.dump
+```

@@ -1,3 +1,5 @@
+prefix: asteurer-com
+
 frontEnd:
   image: ghcr.io/asteurer/asteurer.com-front-end
 

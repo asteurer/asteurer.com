@@ -23,6 +23,8 @@ validate_env "TG_BOT_TOKEN"
 validate_env "CF_TOKEN"
 
 cat << EOF > ../../helm/values.yaml
+prefix: asteurer-com
+
 frontEnd:
   image: ghcr.io/asteurer/asteurer.com-front-end
 
