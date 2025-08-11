@@ -9,7 +9,7 @@
 <a href="{data.next_meme_id}">Next</a>
 <br>
 <br>
-<img alt="Current Meme" src={data.current_meme.url}>
+<img alt="Current Meme" src="/api/memes/{data.current_meme.file_name}">
 
 <style>
   img {

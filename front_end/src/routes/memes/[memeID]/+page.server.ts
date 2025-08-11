@@ -1,19 +1,17 @@
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { env } from '$env/dynamic/private';
+import { getDBClientEndpoint } from '$lib/config.js';
 
 export const load: PageServerLoad = async ({ params }) => {
-
-    // Parse the memeID
     if (!Number.isInteger(Number(params.memeID))) {
         throw error(400, `The memeID needs to be an integer. Received '${params.memeID}'.`);
     }
 
-    let apiURL = `${env.API_URL}/meme/${params.memeID}`;
+    let url = `${getDBClientEndpoint()}/meme/${params.memeID}`;
 
-    // Fetch the JSON data from the API
     try {
-        const response = await fetch(apiURL);
+        const response = await fetch(url);
         if (!response.ok) {
             throw error(response.status, `failed to fetch meme: ${response.statusText}`);
         }

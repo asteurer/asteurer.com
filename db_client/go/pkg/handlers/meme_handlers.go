@@ -14,8 +14,8 @@ import (
 )
 
 type Meme struct {
-	ID  int    `json:"id"`
-	URL string `json:"url"`
+	ID       int    `json:"id"`
+	FileName string `json:"file_name"`
 }
 
 type GetMemeResult struct {
@@ -32,7 +32,7 @@ func writeErr(c *gin.Context, statusCode int, msg string) {
 	}
 }
 
-// GetMeme returns the current, previous, and next meme URLs. If no meme_id is provided in the request URL,
+// GetMeme returns the current, previous, and next meme file name. If no meme_id is provided in the request URL,
 // the first meme is used as the current meme, the last is used as the prev meme, and the second is used as the next meme.
 func GetMeme(ctx context.Context, db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -57,8 +57,8 @@ func GetMeme(ctx context.Context, db *sql.DB) gin.HandlerFunc {
 		}
 
 		if currentMeme.ID > 0 {
-			row := tx.QueryRowContext(ctx, "SELECT url FROM memes WHERE ID = $1", currentMeme.ID)
-			if err := row.Scan(&currentMeme.URL); err != nil {
+			row := tx.QueryRowContext(ctx, "SELECT file_name FROM memes WHERE ID = $1", currentMeme.ID)
+			if err := row.Scan(&currentMeme.FileName); err != nil {
 				if err == sql.ErrNoRows {
 					writeErr(c, http.StatusNotFound, fmt.Sprintf("Meme with ID %d does not exist", currentMeme.ID))
 				} else {
@@ -66,9 +66,9 @@ func GetMeme(ctx context.Context, db *sql.DB) gin.HandlerFunc {
 				}
 				return
 			}
-		} else { // If there isn't a current meme, find the most-recent meme (largest ID number), return the URL, and set as the currentMemeID
-			row := tx.QueryRowContext(ctx, "SELECT id, url FROM memes ORDER BY id DESC LIMIT 1")
-			if err := row.Scan(&currentMeme.ID, &currentMeme.URL); err != nil {
+		} else { // If there isn't a current meme, find the most-recent meme (largest ID number), return the file name, and set as the currentMemeID
+			row := tx.QueryRowContext(ctx, "SELECT id, file_name FROM memes ORDER BY id DESC LIMIT 1")
+			if err := row.Scan(&currentMeme.ID, &currentMeme.FileName); err != nil {
 				if err == sql.ErrNoRows {
 					writeErr(c, http.StatusNoContent, "There are no memes in the database")
 				} else {
@@ -135,7 +135,7 @@ func GetAllMemes(ctx context.Context, db *sql.DB) gin.HandlerFunc {
 		var memes []Meme
 		for rows.Next() {
 			var meme Meme
-			if err := rows.Scan(&meme.ID, &meme.URL); err != nil {
+			if err := rows.Scan(&meme.ID, &meme.FileName); err != nil {
 				writeErr(c, http.StatusInternalServerError, err.Error())
 				return
 			}
@@ -151,10 +151,10 @@ func GetAllMemes(ctx context.Context, db *sql.DB) gin.HandlerFunc {
 	}
 }
 
-// PutMeme inserts a URL into the database and returns the ID of the new entry
+// PutMeme inserts a file name into the database and returns the ID of the new entry
 func PutMeme(ctx context.Context, db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		url, err := io.ReadAll(c.Request.Body)
+		fileName, err := io.ReadAll(c.Request.Body)
 		if err != nil {
 			writeErr(c, http.StatusInternalServerError, err.Error())
 			return
@@ -162,7 +162,7 @@ func PutMeme(ctx context.Context, db *sql.DB) gin.HandlerFunc {
 		defer c.Request.Body.Close()
 
 		var id int
-		if err := db.QueryRowContext(ctx, "INSERT INTO memes (url) VALUES($1) RETURNING id", string(url)).Scan(&id); err != nil {
+		if err := db.QueryRowContext(ctx, "INSERT INTO memes (file_name) VALUES($1) RETURNING id", string(fileName)).Scan(&id); err != nil {
 			writeErr(c, http.StatusInternalServerError, err.Error())
 			return
 		}
@@ -199,6 +199,7 @@ func DeleteMeme(ctx context.Context, db *sql.DB) gin.HandlerFunc {
 	}
 }
 
+// UpdateMeme updates an existing `meme_id` to point to another `file_name`
 func UpdateMeme(ctx context.Context, db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		reqBytes, err := io.ReadAll(c.Request.Body)
@@ -219,15 +220,15 @@ func UpdateMeme(ctx context.Context, db *sql.DB) gin.HandlerFunc {
 		if meme.ID <= 0 {
 			errString = append(errString, "ERROR: JSON missing 'id'")
 		}
-		if len(meme.URL) == 0 {
-			errString = append(errString, "ERROR: JSON missing 'url'")
+		if len(meme.FileName) == 0 {
+			errString = append(errString, "ERROR: JSON missing 'file_name'")
 		}
 		if len(errString) != 0 {
 			writeErr(c, http.StatusBadRequest, strings.Join(errString, "\n"))
 			return
 		}
 
-		result, err := db.ExecContext(ctx, "UPDATE memes SET url = $1 WHERE id = $2", meme.URL, meme.ID)
+		result, err := db.ExecContext(ctx, "UPDATE memes SET file_name = $1 WHERE id = $2", meme.FileName, meme.ID)
 		if err != nil {
 			writeErr(c, http.StatusInternalServerError, err.Error())
 			return

@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -22,20 +23,22 @@ import (
 )
 
 type Config struct {
-	Context     context.Context
-	S3Region    string
-	S3Bucket    string
-	S3Client    *s3.Client
-	Bot         *tgbotapi.BotAPI
-	DBClientURL string
+	Context          context.Context
+	S3Endpoint       string
+	S3Bucket         string
+	S3Client         *s3.Client
+	Bot              *tgbotapi.BotAPI
+	DBClientEndpoint string
 }
 
 type GetMemeResult struct {
 	CurrentMeme struct {
-		ID  int    `json:"id"`
-		URL string `json:"url"`
+		ID       int    `json:"id"`
+		FileName string `json:"file_name"`
 	} `json:"current_meme"`
 }
+
+const S3_PREFIX = "memes/"
 
 var cfg Config
 
@@ -68,37 +71,42 @@ func parseEnvVars() error {
 	// Gather all missing environment variables and print them all in a single error message
 	var envVarErr []string
 
-	awsAccessKey := os.Getenv("AWS_ACCESS_KEY")
-	if len(awsAccessKey) == 0 {
-		envVarErr = append(envVarErr, errMsg("AWS_ACCESS_KEY"))
+	accessKey, ok := os.LookupEnv("ACCESS_KEY")
+	if !ok {
+		envVarErr = append(envVarErr, errMsg("ACCESS_KEY"))
 	}
 
-	awsSecretKey := os.Getenv("AWS_SECRET_KEY")
-	if len(awsSecretKey) == 0 {
-		envVarErr = append(envVarErr, errMsg("AWS_SECRET_KEY"))
+	secretKey, ok := os.LookupEnv("SECRET_KEY")
+	if !ok {
+		envVarErr = append(envVarErr, errMsg("SECRET_KEY"))
 	}
 
-	// Not required
-	awsSessionToken := os.Getenv("AWS_SESSION_TOKEN")
+	sessionToken, ok := os.LookupEnv("SESSION_TOKEN") // Not required
 
-	s3Region := os.Getenv("AWS_S3_REGION")
-	if len(s3Region) == 0 {
-		envVarErr = append(envVarErr, errMsg("AWS_S3_REGION"))
+	s3Region, ok := os.LookupEnv("S3_REGION") // Not required; allows for a default region
+	if !ok {
+		s3Region = "us-east-1"
 	}
 
-	s3Bucket := os.Getenv("AWS_S3_BUCKET")
-	if len(s3Bucket) == 0 {
-		envVarErr = append(envVarErr, errMsg("AWS_S3_BUCKET"))
+	s3Bucket, ok := os.LookupEnv("S3_BUCKET")
+	if !ok {
+		envVarErr = append(envVarErr, errMsg("S3_BUCKET"))
 	}
 
-	apiToken := os.Getenv("TG_BOT_TOKEN")
-	if len(apiToken) == 0 {
+	// Must include both protocol and port (e.g. https://localhost:9000)
+	s3Endpoint, ok := os.LookupEnv("S3_ENDPOINT")
+	if !ok {
+		envVarErr = append(envVarErr, errMsg("S3_ENDPOINT"))
+	}
+
+	apiToken, ok := os.LookupEnv("TG_BOT_TOKEN")
+	if !ok {
 		envVarErr = append(envVarErr, errMsg("TG_BOT_TOKEN"))
 	}
 
-	dbClientURL := os.Getenv("DB_CLIENT_URL")
-	if len(dbClientURL) == 0 {
-		envVarErr = append(envVarErr, errMsg("DB_CLIENT_URL"))
+	dbClientEndpoint, ok := os.LookupEnv("DB_CLIENT_ENDPOINT")
+	if !ok {
+		envVarErr = append(envVarErr, errMsg("DB_CLIENT_ENDPOINT"))
 	}
 
 	if len(envVarErr) > 0 {
@@ -118,7 +126,7 @@ func parseEnvVars() error {
 	awsCfg, err := config.LoadDefaultConfig(
 		ctx,
 		config.WithCredentialsProvider(
-			credentials.NewStaticCredentialsProvider(awsAccessKey, awsSecretKey, awsSessionToken),
+			credentials.NewStaticCredentialsProvider(accessKey, secretKey, sessionToken),
 		),
 		config.WithRegion(s3Region),
 	)
@@ -127,12 +135,22 @@ func parseEnvVars() error {
 	}
 
 	cfg = Config{
-		Context:     ctx,
-		S3Region:    s3Region,
-		S3Bucket:    s3Bucket,
-		S3Client:    s3.NewFromConfig(awsCfg),
-		Bot:         bot,
-		DBClientURL: dbClientURL,
+		Context:    ctx,
+		S3Endpoint: s3Endpoint,
+		S3Bucket:   s3Bucket,
+		S3Client: s3.NewFromConfig(awsCfg, func(o *s3.Options) {
+			o.BaseEndpoint = aws.String(s3Endpoint)
+			o.UsePathStyle = true // Accommodate for Minio's path-style endpoints (e.g. http://localhost:9000/bucket/object)
+			o.HTTPClient = &http.Client{
+				Transport: &http.Transport{
+					TLSClientConfig: &tls.Config{
+						InsecureSkipVerify: true, // Same as using the --insecure flag on the minio client cli
+					},
+				},
+			}
+		}),
+		Bot:              bot,
+		DBClientEndpoint: dbClientEndpoint + "/meme",
 	}
 
 	return nil
@@ -186,7 +204,7 @@ func handleMessage(message *tgbotapi.Message) {
 		}
 
 		if err := processImage(imageData); err != nil {
-			replyToBot("ERROR: Unable to place image in S3")
+			replyToBot("ERROR: Failed to process image")
 			log.Println(err)
 		}
 
@@ -252,10 +270,9 @@ func retrieveImage(message *tgbotapi.Message) ([]byte, error) {
 	return fileBytes, nil
 }
 
-// processImage compresses the image, places it in an S3 bucket, and places the corresponding S3 URL in Postgres
+// processImage compresses the image, places it in an S3 bucket, and places the corresponding filename in Postgres
 func processImage(imageBytes []byte) error {
-	key := "memes/" + fmt.Sprintf("%d", time.Now().UnixNano()) + ".webp"
-	url := "https://s3." + cfg.S3Region + ".amazonaws.com/" + cfg.S3Bucket + "/" + key
+	fileName := fmt.Sprintf("%d", time.Now().UnixNano()) + ".webp"
 
 	// Compressing image
 	imageSpecs := bimg.Options{
@@ -276,8 +293,8 @@ func processImage(imageBytes []byte) error {
 
 	objData := s3.PutObjectInput{
 		Bucket:      aws.String(cfg.S3Bucket),
-		Key:         aws.String(key),
-		Body:        bytes.NewBuffer(processedImg),
+		Key:         aws.String(S3_PREFIX + fileName),
+		Body:        bytes.NewReader(processedImg),
 		ContentType: aws.String("image/webp"),
 	}
 
@@ -287,7 +304,7 @@ func processImage(imageBytes []byte) error {
 
 	// Sending the URL to the database
 	client := &http.Client{}
-	req, err := http.NewRequest("PUT", cfg.DBClientURL, bytes.NewBuffer([]byte(url)))
+	req, err := http.NewRequest("PUT", cfg.DBClientEndpoint, bytes.NewBuffer([]byte(fileName)))
 	if err != nil {
 		return err
 	}
@@ -297,7 +314,14 @@ func processImage(imageBytes []byte) error {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("BAD STATUS: %d", resp.StatusCode)
+		respBytes, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("Unable to read response bytes.\n%v", err)
+		}
+
+		resp.Body.Close()
+
+		return fmt.Errorf("BAD STATUS (%d): %s", resp.StatusCode, string(respBytes))
 	}
 
 	return nil
@@ -307,7 +331,7 @@ func processImage(imageBytes []byte) error {
 func deleteMeme(id int) error {
 	// Retrieve S3 URL
 	client := &http.Client{}
-	url := fmt.Sprintf("%s/%d", cfg.DBClientURL, id)
+	url := fmt.Sprintf("%s/%d", cfg.DBClientEndpoint, id)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return err
@@ -324,7 +348,7 @@ func deleteMeme(id int) error {
 	resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("BAD STATUS: %d", resp.StatusCode)
+		return fmt.Errorf("BAD STATUS (%d): %s", resp.StatusCode, string(respBytes))
 	}
 
 	var meme GetMemeResult
@@ -333,10 +357,9 @@ func deleteMeme(id int) error {
 	}
 
 	// Delete the meme from S3
-	urlParts := strings.Split(meme.CurrentMeme.URL, cfg.S3Bucket+"/") // Split the string by 'bucket-name/'
 	objData := s3.DeleteObjectInput{
 		Bucket: aws.String(cfg.S3Bucket),
-		Key:    aws.String(urlParts[1]), // Everything after 'bucket-name/'
+		Key:    aws.String(S3_PREFIX + meme.CurrentMeme.FileName),
 	}
 
 	if _, err := cfg.S3Client.DeleteObject(cfg.Context, &objData); err != nil {
@@ -345,18 +368,25 @@ func deleteMeme(id int) error {
 	}
 
 	// Delete the meme URL from the database
-	url = fmt.Sprintf("%s/%d", cfg.DBClientURL, id)
+	url = fmt.Sprintf("%s/%d", cfg.DBClientEndpoint, id)
 	req, err = http.NewRequest("DELETE", url, nil)
 	if err != nil {
 		return err
 	}
 
-	if _, err := client.Do(req); err != nil {
+	resp, err = client.Do(req)
+	if err != nil {
 		return err
 	}
 
+	respBytes, err = io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("Unable to read response bytes.\n%v", err)
+	}
+	resp.Body.Close()
+
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("BAD STATUS: %d", resp.StatusCode)
+		return fmt.Errorf("BAD STATUS (%d): %s", resp.StatusCode, string(respBytes))
 	}
 
 	return nil
