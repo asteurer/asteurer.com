@@ -11,13 +11,6 @@ helm/values.yaml
 *venv
 
 #-----------------------
-# Terraform
-#-----------------------
-*.tfstate*
-*.terraform*
-*tfplan*
-
-#-----------------------
 # Svelte
 #-----------------------
 front_end/node_modules

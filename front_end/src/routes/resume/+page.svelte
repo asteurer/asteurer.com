@@ -1,5 +1,5 @@
 <script lang="ts">
-    const pdfUrl: string = 'https://s3.us-east-2.amazonaws.com/asteurer.com-prod/resume.pdf';
+    const pdfUrl: string = '/api/resume.pdf';
   </script>
 
   <div class="pdf-container">

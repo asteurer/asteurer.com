@@ -1,4 +1,4 @@
 CREATE TABLE memes (
     id SERIAL PRIMARY KEY,
-    url TEXT NOT NULL UNIQUE
+    file_name TEXT NOT NULL UNIQUE
 );

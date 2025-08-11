@@ -1,0 +1,91 @@
+services:
+    front-end:
+        image: ghcr.io/asteurer/asteurer.com-front-end
+        container_name: front-end
+        ports:
+            - 8080:8080
+        environment:
+            - S3_ACCESS_KEY=minioadmin
+            - S3_SECRET_KEY=minioadmin
+            - S3_BUCKET_NAME=asteurer-com
+            - S3_ENDPOINT=minio
+            - S3_ENDPOINT_PORT=9000
+            - DB_CLIENT_ENDPOINT=http://db-client:8080
+            - USE_SSL=false
+        depends_on:
+            - postgres
+            - db-client
+            - minio
+        networks:
+            - app-network
+    db-client:
+        image: ghcr.io/asteurer/asteurer.com-db-client
+        container_name: db-client
+        ports:
+            - 8080
+        environment:
+            - POSTGRES_HOST=postgres
+            - POSTGRES_PORT=5432
+            - POSTGRES_DATABASE=memes # DB created in `files_postgres/schema.sql`
+            - POSTGRES_USER=postgres
+            - POSTGRES_PASSWORD=postgres
+        depends_on:
+            - postgres
+        networks:
+            - app-network
+    postgres:
+        image: postgres:17
+        container_name: postgres
+        ports:
+            - 5432
+        environment:
+            - POSTGRES_PASSWORD=postgres
+            - POSTGRES_USER=postgres
+        volumes:
+            - ./files_postgres:/docker-entrypoint-initdb.d
+        networks:
+            - app-network
+    minio:
+        image: minio/minio:latest
+        container_name: minio
+        ports:
+        - "9000:9000"  # MinIO API
+        - "9001:9001"  # MinIO Console
+        environment:
+        - MINIO_ROOT_USER=minioadmin
+        - MINIO_ROOT_PASSWORD=minioadmin
+        command: server /data --console-address ":9001"
+        volumes:
+        - minio_data:/data
+        restart: unless-stopped
+        networks:
+        - app-network
+
+    minio-init:
+        image: minio/mc:latest
+        container_name: minio-init
+        depends_on:
+        - minio
+        volumes:
+        - ./files_minio:/files_minio:ro  # Mount files as read-only
+        entrypoint: >
+            /bin/sh -c "
+            echo 'Waiting for MinIO to be ready...';
+            until mc alias set test http://minio:9000 minioadmin minioadmin; do sleep 2; done;
+            echo 'Creating bucket...';
+            mc mb test/asteurer-com --ignore-existing;
+            echo 'Copying files_minio...';
+            mc mirror /files_minio test/asteurer-com/ --overwrite;
+            echo 'Initialization complete!';
+            "
+        networks:
+        - app-network
+        restart: "no"  # Only run once
+
+volumes:
+  minio_data:
+    driver: local
+
+networks:
+    app-network:
+        driver: bridge

@@ -26,6 +26,8 @@ func main() {
 
 	ctx := context.Background()
 
+	gin.SetMode(gin.ReleaseMode)
+
 	r := gin.Default()
 	r.GET("/all_memes", handlers.GetAllMemes(ctx, db))
 	r.GET("/latest_meme", handlers.GetMeme(ctx, db))
@@ -45,28 +47,28 @@ func getPostgresURL() (string, error) {
 	// Gather all missing environment variables and print them all in a single error message
 	var envVarErr []string
 
-	pgHost := os.Getenv("POSTGRES_HOST")
-	if len(pgHost) == 0 {
+	pgHost, ok := os.LookupEnv("POSTGRES_HOST")
+	if !ok {
 		envVarErr = append(envVarErr, errMsg("POSTGRES_HOST"))
 	}
 
-	pgPort := os.Getenv("POSTGRES_PORT")
-	if len(pgHost) == 0 {
+	pgPort, ok := os.LookupEnv("POSTGRES_PORT")
+	if !ok {
 		envVarErr = append(envVarErr, errMsg("POSTGRES_PORT"))
 	}
 
-	pgDB := os.Getenv("POSTGRES_DATABASE")
-	if len(pgHost) == 0 {
+	pgDB, ok := os.LookupEnv("POSTGRES_DATABASE")
+	if !ok {
 		envVarErr = append(envVarErr, errMsg("POSTGRES_DATABASE"))
 	}
 
-	pgUser := os.Getenv("POSTGRES_USER")
-	if len(pgUser) == 0 {
+	pgUser, ok := os.LookupEnv("POSTGRES_USER")
+	if !ok {
 		envVarErr = append(envVarErr, errMsg("POSTGRES_USER"))
 	}
 
-	pgPasswd := os.Getenv("POSTGRES_PASSWORD")
-	if len(pgPasswd) == 0 {
+	pgPasswd, ok := os.LookupEnv("POSTGRES_PASSWORD")
+	if !ok {
 		envVarErr = append(envVarErr, errMsg("POSTGRES_PASSWORD"))
 	}
 

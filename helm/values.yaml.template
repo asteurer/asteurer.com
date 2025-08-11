@@ -1,36 +1,48 @@
 prefix: asteurer-com
+namespace: asteurer
+replicas: 3
 
 frontEnd:
-  image: ghcr.io/asteurer/asteurer.com-front-end
-
-database:
-  image: postgres:17
+  image: ghcr.io/asteurer/asteurer.com-front-end:v0.1.0
   secrets:
-  # secrets.name is intended to be the environment variable name.
-  # Kubernetes seems not to like underscores and upper-case,
-  # so we capitalize and change the hyphens to underscores in the Helm template.
-  - name: postgres-password
-    value: <FILLED_IN_BY_SCRIPT>
-  - name: postgres-user
-    value: <FILLED_IN_BY_SCRIPT>
-
+  - name: access-key
+    value: <FILL_IN>
+  - name: secret-key
+    value: <FILL_IN>
+  - name: bucket-name
+    value: <FILL_IN>
+  - name: s3-endpoint
+    value: <FILL_IN>
+  - name: s3-endpoint-port
+    value: "9000"
 dbClient:
-  image: ghcr.io/asteurer/asteurer.com-db-client
+  image: ghcr.io/asteurer/asteurer.com-db-client:v0.1.0
+  secrets:
+  - name: postgres-password
+    value: <FILL_IN>
+  - name: postgres-user
+    value: <FILL_IN>
+  - name: postgres-host
+    value: <FILL_IN>
+  - name: postgres-port
+    value: "5432"
+  - name: postgres-database
+    value: <FILL_IN>
 
 memeManager:
-  image: ghcr.io/asteurer/asteurer.com-meme-manager
+  image: ghcr.io/asteurer/asteurer.com-meme-manager:v0.1.0
   secrets:
-  - name: aws-access-key
-    value: <FILLED_IN_BY_SCRIPT>
-  - name: aws-secret-key
-    value: <FILLED_IN_BY_SCRIPT>
-  - name: aws-s3-region
-    value: <FILLED_IN_BY_SCRIPT>
-  - name: aws-s3-bucket
-    value: <FILLED_IN_BY_SCRIPT>
+  - name: access-key
+    value: <FILL_IN>
+  - name: secret-key
+    value: <FILL_IN>
+  - name: s3-bucket
+    value: <FILL_IN>
   - name: tg-bot-token
-    value: <FILLED_IN_BY_SCRIPT>
+    value: <FILL_IN>
+  - name: s3-endpoint
+    value: <FILL_IN>
 
 cloudflared:
   image: cloudflare/cloudflared:2025.4.0
-  token: <FILLED_IN_BY_SCRIPT>
+  token: <FILL_IN>

@@ -1,106 +1,6 @@
 # Storing root context
 {{- $root := . -}}
 
-#############################################
-###              Database                 ###
-#############################################
-
-# Load the schema.sql file
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: "{{ .Values.prefix }}-database-schema"
-data:
-  schema.sql: {{ .Files.Get "files/schema.sql" | indent 4 }}
-
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: "{{ .Values.prefix }}-database-secrets"
-  namespace: default
-type: Opaque
-data:
-{{- range .Values.database.secrets }}
-  {{ .name }}: "{{ .value | b64enc }}"
-{{- end }}
-
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: "{{ .Values.prefix }}-database"
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: "{{ .Values.prefix }}-database"
-  template:
-    metadata:
-      labels:
-        app: "{{ .Values.prefix }}-database"
-    spec:
-      containers:
-        - name: "{{ .Values.prefix }}-database"
-          image: "{{ .Values.database.image }}"
-          imagePullPolicy: Always
-          ports:
-            - containerPort: 5432
-          env:
-            {{- range .Values.database.secrets }}
-            - name: "{{ upper .name | replace "-" "_" }}"
-              valueFrom:
-                secretKeyRef:
-                  name: "{{ $root.Values.prefix }}-database-secrets"
-                  key: "{{ .name }}"
-            {{- end }}
-          volumeMounts:
-            - mountPath: /docker-entrypoint-initdb.d/
-              name: schema-volume
-            - mountPath: /var/lib/postgresql/data
-              name: db-storage
-          resources:
-            requests:
-              memory: "512Mi"
-              cpu: "250m"
-            limits:
-              memory: "1Gi"
-              cpu: "500m"
-
-      volumes:
-        - name: schema-volume
-          configMap:
-            name: "{{ .Values.prefix }}-database-schema"
-        - name: db-storage
-          persistentVolumeClaim:
-            claimName: "{{ .Values.prefix }}-db-pvc"
-
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: "{{ .Values.prefix }}-db-pvc"
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 1Gi
-
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: "{{ .Values.prefix }}-database"
-  labels:
-    app: "{{ .Values.prefix }}-database"
-spec:
-  type: ClusterIP
-  ports:
-    - port: 5432
-      targetPort: 5432
-  selector:
-    app: "{{ .Values.prefix }}-database"
 
 #############################################
 ###             Meme Manager              ###
@@ -111,7 +11,7 @@ apiVersion: v1
 kind: Secret
 metadata:
   name: "{{ .Values.prefix }}-meme-manager-secrets"
-  namespace: default
+  namespace: "{{ .Values.namespace }}"
 type: Opaque
 data:
 {{- range .Values.memeManager.secrets }}
@@ -123,8 +23,9 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: "{{ .Values.prefix }}-meme-manager"
+  namespace: "{{ .Values.namespace }}"
 spec:
-  replicas: 1
+  replicas: {{ .Values.replicas }}
   selector:
     matchLabels:
       app: "{{ .Values.prefix }}-meme-manager"
@@ -133,13 +34,22 @@ spec:
       labels:
         app: "{{ .Values.prefix }}-meme-manager"
     spec:
+      affinity:
+        podAntiAffinity: # Make sure servers aren't scheduled on same node
+          preferredDuringSchedulingIgnoredDuringExecution: # Set to 'preferred' just in case we have a single-node cluster
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app: "{{ .Values.prefix }}-meme-manager"
+              topologyKey: kubernetes.io/hostname
       containers:
         - name: "{{ .Values.prefix }}-meme-manager"
           image: "{{ .Values.memeManager.image }}"
           imagePullPolicy: Always
           env:
-            - name: DB_CLIENT_URL
-              value: "http://{{ .Values.prefix }}-db-client.default.svc.cluster.local:8080/meme"
+            - name: DB_CLIENT_ENDPOINT
+              value: "http://{{ .Values.prefix }}-db-client.{{ .Values.namespace }}.svc.cluster.local:8080"
             {{- range .Values.memeManager.secrets }}
             - name: "{{ upper .name | replace "-" "_"}}"
               valueFrom:
@@ -153,12 +63,25 @@ spec:
 #############################################
 
 ---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: "{{ .Values.prefix }}-dbclient-secrets"
+  namespace: "{{ .Values.namespace }}"
+type: Opaque
+data:
+{{- range .Values.dbClient.secrets }}
+  {{ .name }}: "{{ .value | b64enc }}"
+{{- end }}
+
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: "{{ .Values.prefix }}-db-client"
+  namespace: "{{ .Values.namespace }}"
 spec:
-  replicas: 1
+  replicas: {{ .Values.replicas }}
   selector:
     matchLabels:
       app: "{{ .Values.prefix }}-db-client"
@@ -167,6 +90,15 @@ spec:
       labels:
         app: "{{ .Values.prefix }}-db-client"
     spec:
+      affinity:
+        podAntiAffinity: # Make sure servers aren't scheduled on same node
+          preferredDuringSchedulingIgnoredDuringExecution: # Set to 'preferred' just in case we have a single-node cluster
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app: "{{ .Values.prefix }}-db-client"
+              topologyKey: kubernetes.io/hostname
       containers:
         - name: "{{ .Values.prefix }}-db-client"
           image: "{{ .Values.dbClient.image }}"
@@ -174,17 +106,11 @@ spec:
           ports:
             - containerPort: 8080
           env:
-            - name: POSTGRES_HOST
-              value: "{{ .Values.prefix }}-database"
-            - name: POSTGRES_PORT
-              value: "5432"
-            - name: POSTGRES_DATABASE
-              value: postgres
-            {{- range .Values.database.secrets }}
+            {{- range .Values.dbClient.secrets }}
             - name: "{{ upper .name | replace "-" "_"}}"
               valueFrom:
                 secretKeyRef:
-                  name: "{{ $root.Values.prefix }}-database-secrets"
+                  name: "{{ $root.Values.prefix }}-dbclient-secrets"
                   key: "{{ .name }}"
             {{- end }}
 
@@ -193,6 +119,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: "{{ .Values.prefix }}-db-client"
+  namespace: "{{ .Values.namespace }}"
   labels:
     app: "{{ .Values.prefix }}-db-client"
 spec:
@@ -204,6 +131,83 @@ spec:
     app: "{{ .Values.prefix }}-db-client"
 
 #############################################
+###              Front End                ###
+#############################################
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: "{{ .Values.prefix }}-frontend-secrets"
+  namespace: "{{ .Values.namespace }}"
+type: Opaque
+data:
+{{- range .Values.frontEnd.secrets }}
+  {{ .name }}: "{{ .value | b64enc }}"
+{{- end }}
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: "{{ .Values.prefix }}-front-end"
+  namespace: "{{ .Values.namespace }}"
+spec:
+  replicas: {{ .Values.replicas }}
+  selector:
+    matchLabels:
+      app: "{{ .Values.prefix }}-front-end"
+  template:
+    metadata:
+      labels:
+        app: "{{ .Values.prefix }}-front-end"
+    spec:
+      affinity:
+        podAntiAffinity: # Make sure servers aren't scheduled on same node
+          preferredDuringSchedulingIgnoredDuringExecution: # Set to 'preferred' just in case we have a single-node cluster
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app: "{{ .Values.prefix }}-front-end"
+              topologyKey: kubernetes.io/hostname
+      containers:
+        - name: "{{ .Values.prefix }}-front-end"
+          image: "{{ .Values.frontEnd.image }}"
+          imagePullPolicy: Always
+          env:
+            - name: NODE_TLS_REJECT_UNAUTHORIZED # Disables SSL certificate validation (same as mc --insecure)
+              value: "0"
+            - name: DB_CLIENT_ENDPOINT
+              value: http://{{ .Values.prefix }}-db-client.{{ .Values.namespace }}.svc.cluster.local:8080
+            {{- range .Values.frontEnd.secrets }}
+            - name: "{{ upper .name | replace "-" "_"}}"
+              valueFrom:
+                secretKeyRef:
+                  name: "{{ $root.Values.prefix }}-frontend-secrets"
+                  key: "{{ .name }}"
+            {{- end }}
+          ports:
+            - containerPort: 8080
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: "{{ .Values.prefix }}-front-end"
+  namespace: "{{ .Values.namespace }}"
+  labels:
+    app: "{{ .Values.prefix }}-front-end"
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8080
+      targetPort: 8080
+  selector:
+    app: "{{ .Values.prefix }}-front-end"
+
+
+#############################################
 ###             Cloudflared               ###
 #############################################
 
@@ -212,7 +216,7 @@ apiVersion: v1
 kind: Secret
 metadata:
   name: "{{ .Values.prefix }}-cloudflared-secrets"
-  namespace: default
+  namespace: "{{ .Values.namespace }}"
 type: Opaque
 data:
   token: "{{ .Values.cloudflared.token | b64enc }}"
@@ -222,8 +226,9 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: "{{ .Values.prefix }}-cloudflared"
+  namespace: "{{ .Values.namespace }}"
 spec:
-  replicas: 1
+  replicas: {{ .Values.replicas }}
   selector:
     matchLabels:
       app: "{{ .Values.prefix }}-cloudflared"
@@ -243,47 +248,3 @@ spec:
               secretKeyRef:
                 name: "{{ .Values.prefix }}-cloudflared-secrets"
                 key: token
-
-#############################################
-###              Front End                ###
-#############################################
-
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: "{{ .Values.prefix }}-front-end"
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: "{{ .Values.prefix }}-front-end"
-  template:
-    metadata:
-      labels:
-        app: "{{ .Values.prefix }}-front-end"
-    spec:
-      containers:
-        - name: "{{ .Values.prefix }}-front-end"
-          image: "{{ .Values.frontEnd.image }}"
-          imagePullPolicy: Always
-          env:
-            - name: API_URL
-              value: http://{{ .Values.prefix }}-db-client.default.svc.cluster.local:8080
-          ports:
-            - containerPort: 8080
-
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: "{{ .Values.prefix }}-front-end"
-  labels:
-    app: "{{ .Values.prefix }}-front-end"
-spec:
-  type: ClusterIP
-  ports:
-    - port: 8080
-      targetPort: 8080
-  selector:
-    app: "{{ .Values.prefix }}-front-end"

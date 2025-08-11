@@ -16,7 +16,7 @@ def test_can_create():
     assert get_task_response.status_code == 200
     get_task_data = get_task_response.json()
     assert get_task_data["current_meme"]["id"] == create_task_id
-    assert get_task_data["current_meme"]["url"] == payload
+    assert get_task_data["current_meme"]["file_name"] == payload
     assert get_task_data["previous_meme_id"] == create_task_id
     assert get_task_data["next_meme_id"] == create_task_id
 
@@ -43,7 +43,7 @@ def test_can_read():
     assert get_task_response_1.status_code == 200
     get_task_data = get_task_response_1.json()
     assert get_task_data["current_meme"]["id"] == id_1
-    assert get_task_data["current_meme"]["url"] == payload_1
+    assert get_task_data["current_meme"]["file_name"] == payload_1
     assert get_task_data["previous_meme_id"] == id_2
     assert get_task_data["next_meme_id"] == id_2
 
@@ -52,7 +52,7 @@ def test_can_read():
     assert get_task_response_1.status_code == 200
     get_task_data = get_task_response_2.json()
     assert get_task_data["current_meme"]["id"] == id_2
-    assert get_task_data["current_meme"]["url"] == payload_2
+    assert get_task_data["current_meme"]["file_name"] == payload_2
     assert get_task_data["previous_meme_id"] == id_1
     assert get_task_data["next_meme_id"] == id_1
 
@@ -78,19 +78,19 @@ def test_can_read_all():
         "demo.com"
     ]
 
-    urls = {}
-    for url in payloads:
-        create_task_response = requests.put(ENDPOINT + "/meme", bytearray(url, "utf-8"))
+    file_names = {}
+    for file_name in payloads:
+        create_task_response = requests.put(ENDPOINT + "/meme", bytearray(file_name, "utf-8"))
         assert create_task_response.status_code == 200
-        urls[create_task_response.json()["id"]] = url # Fill the dictionary with 'id: url'
+        file_names[create_task_response.json()["id"]] = file_name # Fill the dictionary with 'id: file_name'
 
-    # Retrieve all_memes: {id: int, url: string}
+    # Retrieve all_memes: {id: int, file_name: string}
     get_all_task_response = requests.get(ENDPOINT + "/all_memes")
     assert get_all_task_response.status_code == 200
     get_all_task_data = get_all_task_response.json()
 
     for obj in get_all_task_data:
-        assert urls[obj["id"]] == obj["url"]
+        assert file_names[obj["id"]] == obj["file_name"]
         delete_task_response = requests.delete(ENDPOINT + f"/meme/{obj["id"]}")
         assert delete_task_response.status_code == 200
 
@@ -113,21 +113,21 @@ def test_can_update():
     assert get_task_response.status_code == 200
     get_task_data = get_task_response.json()
     assert get_task_data["current_meme"]["id"] == create_task_id
-    assert get_task_data["current_meme"]["url"] == payload
+    assert get_task_data["current_meme"]["file_name"] == payload
     assert get_task_data["previous_meme_id"] == create_task_id
     assert get_task_data["next_meme_id"] == create_task_id
 
     # Update the item
     update_payload = {
         "id": create_task_id,
-        "url": "updated-example.com"
+        "file_name": "updated-example.com"
     }
     update_task_response = requests.post(ENDPOINT + "/meme", json.dumps(update_payload))
     assert update_task_response.status_code == 200
     validate_update_task_response = requests.get(ENDPOINT + f"/meme/{create_task_id}")
     validate_update_task_data = validate_update_task_response.json()
     assert validate_update_task_data["current_meme"]["id"] == create_task_id
-    assert validate_update_task_data["current_meme"]["url"] == update_payload["url"]
+    assert validate_update_task_data["current_meme"]["file_name"] == update_payload["file_name"]
     assert validate_update_task_data["previous_meme_id"] == create_task_id
     assert validate_update_task_data["next_meme_id"] == create_task_id
 
